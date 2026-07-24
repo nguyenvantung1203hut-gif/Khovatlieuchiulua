@@ -1,0 +1,4147 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- ===== PWA: cho phép "Thêm vào màn hình chính" có icon riêng ===== -->
+  <!-- Các file manifest.json, icon-192.png, icon-512.png, icon-512-maskable.png,
+       apple-touch-icon.png, sw.js phải nằm CÙNG THƯ MỤC với file HTML này khi
+       deploy lên hosting (Firebase Hosting, v.v.) thì mới hoạt động được. -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#123A5C">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Kho NVL">
+  <title>Quản lý kho nguyên vật liệu</title>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+  <!-- Thư viện Excel -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <!-- Font chữ: Manrope cho tiêu đề (đanh, hiện đại), Inter cho giao diện,
+       IBM Plex Mono cho số liệu/mã hàng (cảm giác chính xác kiểu bảng điều khiển) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      /* ---- Neutrals (nền xám-xanh lạnh, không dùng cream/be mặc định) ---- */
+      --ink-900: #101E2B;
+      --ink-700: #2E3F52;
+      --ink-500: #5C7085;
+      --ink-300: #94A5B6;
+      --line: #DCE3EA;
+      --line-soft: #E9EEF3;
+      --bg: #EBF0F5;
+      --surface: #FFFFFF;
+      --surface-alt: #F5F8FB;
+
+      /* ---- Brand: xanh thép công nghiệp (tin cậy, không phải xanh dương mặc định) ---- */
+      --brand-900: #0C2C46;
+      --brand-800: #123A5C;
+      --brand-700: #17486F;
+      --brand-600: #1F5C8A;
+      --brand-500: #2E77A8;
+      --brand-100: #E2ECF4;
+
+      /* ---- Accent: đồng-cam ấm cho thao tác cần chú ý (khác tông terracotta mặc định) ---- */
+      --accent-700: #8A4315;
+      --accent-600: #A8551D;
+      --accent-100: #F5E7DA;
+
+      /* ---- Trạng thái tồn kho: xanh lá / vàng hổ phách / đỏ gạch ---- */
+      --ok-700: #145C40;
+      --ok-600: #1C8259;
+      --ok-100: #E1F3EA;
+      --warn-700: #7A5300;
+      --warn-600: #B9840F;
+      --warn-100: #FBF0D9;
+      --danger-700: #832A20;
+      --danger-600: #B93B2C;
+      --danger-100: #FAE6E3;
+
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --shadow-sm: 0 1px 3px rgba(16,30,43,0.08);
+      --shadow-md: 0 4px 18px rgba(16,30,43,0.10);
+      --shadow-lg: 0 14px 40px rgba(16,30,43,0.20);
+
+      --font-display: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      --font-mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: var(--font-body);
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      max-width: 1800px;
+      margin: 10px auto;
+      padding: 0 10px;
+      background: var(--bg);
+      color: var(--ink-700);
+    }
+
+    h1 {
+      text-align: center;
+      color: var(--ink-900);
+      font-size: 22px;
+      margin: 10px 0;
+    }
+
+    .login-container {
+      max-width: 440px;
+      margin: 48px auto;
+      background: var(--surface);
+      padding: 32px 28px;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      border-top: 4px solid var(--brand-700);
+    }
+
+    .login-brand {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 22px;
+    }
+    .login-brand .login-icon {
+      width: 46px;
+      height: 46px;
+      border-radius: var(--radius-md);
+      background: var(--brand-800);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .login-brand .login-icon svg { width: 24px; height: 24px; }
+    .login-brand h2 {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 19px;
+      color: var(--ink-900);
+      letter-spacing: -0.01em;
+    }
+    .login-brand p {
+      font-size: 12.5px;
+      color: var(--ink-500);
+      text-align: center;
+    }
+
+    .login-container input {
+      width: 100%;
+      padding: 12px 14px;
+      margin: 6px 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      font-size: 15px;
+      background: var(--surface-alt);
+      color: var(--ink-900);
+    }
+
+    .login-container input:focus {
+      border-color: var(--brand-500);
+      outline: none;
+      background: #fff;
+      box-shadow: 0 0 0 3px var(--brand-100);
+    }
+
+    .login-container .btn {
+      width: 100%;
+      padding: 12px;
+      font-size: 15px;
+      margin-top: 10px;
+    }
+
+    .login-container hr {
+      margin: 22px 0;
+      border: none;
+      border-top: 1px solid var(--line-soft);
+    }
+
+    .login-container p {
+      text-align: center;
+      font-size: 13.5px;
+      color: var(--ink-500);
+    }
+
+    .login-container a {
+      color: var(--brand-600);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .btn {
+      padding: 10px 18px;
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+      box-shadow: var(--shadow-sm);
+      letter-spacing: 0.01em;
+    }
+
+    .btn:active { transform: scale(0.96); }
+    .btn:hover { filter: brightness(1.06); }
+    .btn:focus-visible { outline: 2px solid var(--brand-500); outline-offset: 2px; }
+
+    .btn-primary { background: var(--brand-700); color: #fff; }
+    .btn-primary:active { background: var(--brand-800); }
+    .btn-success { background: var(--ok-600); color: #fff; }
+    .btn-success:active { background: var(--ok-700); }
+    .btn-danger { background: var(--danger-600); color: #fff; }
+    .btn-danger:active { background: var(--danger-700); }
+    .btn-warning { background: var(--accent-600); color: #fff; }
+    .btn-warning:active { background: var(--accent-700); }
+    .btn-info { background: var(--brand-500); color: #fff; }
+    .btn-info:active { background: var(--brand-600); }
+    .btn-sm { padding: 5px 12px; font-size: 12px; box-shadow: none; }
+
+    .alert {
+      padding: 12px 16px;
+      border-radius: var(--radius-sm);
+      margin: 10px 0;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .alert-success { background: var(--ok-100); color: var(--ok-700); border-left: 4px solid var(--ok-600); }
+    .alert-error { background: var(--danger-100); color: var(--danger-700); border-left: 4px solid var(--danger-600); }
+    .alert-info { background: var(--brand-100); color: var(--brand-800); border-left: 4px solid var(--brand-500); }
+    .alert-warning { background: var(--warn-100); color: var(--warn-700); border-left: 4px solid var(--warn-600); }
+    .alert-danger { background: var(--danger-100); color: var(--danger-700); border-left: 4px solid var(--danger-600); }
+
+    .hidden { display: none !important; }
+
+    /* ---- Modal sửa mặt hàng (thay cho prompt()) ---- */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(12,24,36,0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
+    }
+    .modal-overlay.hidden { display: none !important; }
+    .modal-box {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+      width: 100%;
+      max-width: 480px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: var(--shadow-lg);
+      border-top: 4px solid var(--brand-700);
+    }
+    .modal-box h3 {
+      margin-bottom: 18px;
+      color: var(--ink-900);
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 18px;
+    }
+    .modal-box .form-group { margin-bottom: 12px; }
+    .modal-box .form-group > div { min-width: 100%; }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    #appSection {
+      display: none;
+    }
+
+    .app-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(135deg, var(--brand-900), var(--brand-700));
+      color: #fff;
+      padding: 14px 20px;
+      border-radius: var(--radius-lg);
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-md);
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .app-header .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .app-header .brand-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: var(--radius-sm);
+      background: rgba(255,255,255,0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .app-header .brand-icon svg { width: 21px; height: 21px; stroke: #fff; }
+    .app-header .brand-text h1 {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 17px;
+      color: #fff;
+      text-align: left;
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+    .app-header .brand-text span {
+      font-size: 11.5px;
+      color: rgba(255,255,255,0.65);
+      font-weight: 500;
+    }
+
+    .user-info {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .user-info .user-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.10);
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      color: #fff;
+    }
+    .user-info .user-pill svg { width: 15px; height: 15px; stroke: rgba(255,255,255,0.8); flex-shrink: 0; }
+    .user-info .emp-detail { color: rgba(255,255,255,0.6); font-size: 12px; }
+
+    .tabs {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 15px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .tab-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 10px 16px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: 0.15s;
+      white-space: nowrap;
+      color: var(--ink-500);
+    }
+    .tab-btn svg { width: 16px; height: 16px; stroke: var(--ink-300); flex-shrink: 0; transition: 0.15s; }
+    .tab-btn:hover { border-color: var(--brand-500); color: var(--brand-700); }
+    .tab-btn:hover svg { stroke: var(--brand-500); }
+
+    .tab-btn.active {
+      background: var(--brand-700);
+      color: #fff;
+      border-color: var(--brand-700);
+      box-shadow: var(--shadow-sm);
+    }
+    .tab-btn.active svg { stroke: #fff; }
+
+    .tab-btn.hidden-tab {
+      display: none !important;
+    }
+
+    .tab-content {
+      display: none;
+      background: var(--surface);
+      padding: 16px 14px;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--line-soft);
+    }
+
+    .tab-content.active { display: block; }
+    .tab-content h3 {
+      font-family: var(--font-display);
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      color: var(--ink-900);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tab-content h3 svg { width: 19px; height: 19px; stroke: var(--brand-600); flex-shrink: 0; }
+    .tab-content h4 { color: var(--ink-700); font-weight: 700; font-size: 14px; }
+
+    .form-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-end;
+      margin-bottom: 14px;
+    }
+
+    .form-group > div {
+      flex: 1 1 auto;
+      min-width: 120px;
+    }
+
+    .form-group label {
+      display: block;
+      font-weight: 600;
+      font-size: 12.5px;
+      margin-bottom: 4px;
+      color: var(--ink-500);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line);
+      font-size: 15px;
+      background: var(--surface-alt);
+      color: var(--ink-900);
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      border-color: var(--brand-500);
+      outline: none;
+      background: #fff;
+      box-shadow: 0 0 0 3px var(--brand-100);
+    }
+
+    .import-box {
+      margin: 15px 0;
+      padding: 15px;
+      background: var(--surface-alt);
+      border-radius: var(--radius-md);
+      border: 1.5px dashed var(--brand-500);
+    }
+
+    .import-box .import-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .import-box .import-row > div {
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .import-box label {
+      font-weight: 600;
+      display: block;
+      margin-bottom: 4px;
+      font-size: 13px;
+    }
+
+    .import-box input[type="file"] {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      margin-top: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      min-width: 400px;
+    }
+
+    th, td {
+      border: 1px solid var(--line-soft);
+      padding: 9px 10px;
+      text-align: center;
+    }
+    td { color: var(--ink-700); font-variant-numeric: tabular-nums; }
+    td strong { font-family: var(--font-mono); color: var(--ink-900); }
+
+    th {
+      background: var(--brand-700);
+      color: #fff;
+      font-family: var(--font-body);
+      font-weight: 600;
+      font-size: 12.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+
+    tr:nth-child(even) { background: var(--surface-alt); }
+    tr:hover { background: var(--brand-100); }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 11px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .badge-admin { background: var(--accent-600); color: #fff; }
+    .badge-worker { background: var(--ink-500); color: #fff; }
+
+    .progress-text {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #495057;
+    }
+
+    .alert-critical {
+      background: var(--danger-100) !important;
+      color: var(--danger-700) !important;
+    }
+    .alert-warning-yellow {
+      background: var(--warn-100) !important;
+      color: var(--warn-700) !important;
+    }
+    .alert-safe {
+      background: var(--ok-100) !important;
+      color: var(--ok-700) !important;
+    }
+
+    /* ---- Bảng cảnh báo MRP dạng list thu gọn + mini-timeline ---- */
+    .mrp-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 8px 0;
+    }
+    .mrp-legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--ink-500);
+      margin-bottom: 8px;
+    }
+    .mrp-legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .mrp-dot { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+    .mrp-dot.mrp-green { background: var(--ok-600); }
+    .mrp-dot.mrp-yellow { background: var(--warn-600); }
+    .mrp-dot.mrp-red { background: var(--danger-600); }
+
+    .mrp-list {
+      background: var(--surface);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--line-soft);
+    }
+    .mrp-section-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--ink-300);
+      padding: 9px 12px 4px 12px;
+      background: var(--surface);
+    }
+    .mrp-row {
+      display: grid;
+      grid-template-columns: 76px minmax(130px,190px) 56px 1fr 150px 168px 20px;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--line-soft);
+      cursor: pointer;
+      gap: 8px;
+    }
+    .mrp-row:hover { background: var(--surface-alt); }
+    .mrp-row.mrp-ok-bar { border-left: 4px solid var(--ok-600); }
+    .mrp-row.mrp-warn-bar { border-left: 4px solid var(--warn-600); }
+    .mrp-row.mrp-danger-bar { border-left: 4px solid var(--danger-600); }
+
+    .mrp-code { font-weight: 700; color: var(--ink-900); font-size: 13px; font-family: var(--font-mono); }
+    .mrp-name { color: var(--ink-700); font-size: 12.5px; line-height: 1.25; }
+    .mrp-stock { font-weight: 700; text-align: center; font-size: 13px; font-family: var(--font-mono); color: var(--ink-900); }
+    .mrp-config-warn {
+      display: inline-block;
+      margin-top: 2px;
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--accent-700);
+      background: var(--accent-100);
+      border: 1px solid #ecd2b8;
+      border-radius: 5px;
+      padding: 1px 6px;
+    }
+
+    /* Timeline KHÔNG được xuống dòng - luôn nằm gọn 1 hàng. Kích thước mỗi ô
+       (--mrp-cell) được JS tính động theo số tuần đang chọn (xem getMrpCellSize),
+       để 6/9/12/16 tuần đều vừa khít trong 1 dòng thay vì bị wrap xuống dòng 2-3. */
+    /* Timeline KHÔNG được xuống dòng - luôn nằm gọn 1 hàng. Kích thước mỗi ô
+       (--mrp-cell) được JS tính động theo số tuần đang chọn (xem getMrpCellSize),
+       để 6/9/12/16 tuần đều vừa khít trong 1 dòng thay vì bị wrap xuống dòng 2-3.
+       Đây là yếu tố thị giác đặc trưng của trang: dải "sổ cái" hàng tuần, mỗi ô
+       như một con tem trạng thái, tuần hiện tại có dấu mốc riêng biệt. */
+    .mrp-timeline {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 3px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: thin;
+      padding-bottom: 2px;
+    }
+    .mrp-cell {
+      width: var(--mrp-cell, 46px);
+      height: var(--mrp-cell, 46px);
+      min-width: var(--mrp-cell, 46px);
+      border-radius: 5px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      line-height: 1.1;
+      position: relative;
+      font-family: var(--font-mono);
+    }
+    .mrp-cell .mrp-wk { font-size: 9.5px; opacity: 0.75; font-weight: 600; font-family: var(--font-body); }
+    .mrp-cell .mrp-val { font-size: 12.5px; font-weight: 700; }
+    .mrp-cell.mrp-green { background: var(--ok-100); color: var(--ok-700); }
+    .mrp-cell.mrp-yellow { background: var(--warn-100); color: var(--warn-700); }
+    .mrp-cell.mrp-red { background: var(--danger-100); color: var(--danger-700); }
+    .mrp-cell.mrp-current {
+      box-shadow: inset 0 0 0 2px var(--brand-600);
+    }
+    .mrp-cell.mrp-current::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--brand-600);
+    }
+
+    .mrp-firstissue { font-size: 12px; }
+    .mrp-firstissue.mrp-none { color: var(--ok-600); font-weight: 600; }
+    .mrp-firstissue.mrp-warn { color: var(--warn-700); font-weight: 600; }
+    .mrp-firstissue.mrp-danger { color: var(--danger-700); font-weight: 700; }
+
+    .mrp-deadline { font-size: 12px; font-family: var(--font-mono); }
+    .mrp-deadline .mrp-overdue { color: var(--danger-700); font-weight: 700; font-family: var(--font-body); }
+    .mrp-deadline .mrp-soon { color: var(--warn-700); font-weight: 600; font-family: var(--font-body); }
+    .mrp-deadline .mrp-none { color: var(--ink-300); font-family: var(--font-body); }
+
+    .mrp-chevron { text-align: center; color: var(--ink-300); transition: transform 0.15s; font-size: 12px; }
+    .mrp-row.mrp-expanded .mrp-chevron { transform: rotate(90deg); color: var(--brand-600); }
+
+    .mrp-detail {
+      display: none;
+      background: var(--surface-alt);
+      padding: 4px 14px 12px 18px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+    .mrp-detail.mrp-open { display: block; }
+    .mrp-detail table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+    .mrp-detail th, .mrp-detail td { padding: 6px 9px; text-align: left; border: none; }
+    .mrp-detail thead th { color: var(--ink-500); font-weight: 600; border-bottom: 1px solid var(--line); background: transparent; text-transform: none; letter-spacing: normal; font-size: 12px; }
+    .mrp-detail tbody tr { border-bottom: 1px solid var(--line-soft); }
+    .mrp-detail tbody td { font-family: var(--font-mono); }
+    .mrp-detail tr.mrp-dgreen { background: var(--ok-100); }
+    .mrp-detail tr.mrp-dyellow { background: var(--warn-100); }
+    .mrp-detail tr.mrp-dred { background: var(--danger-100); }
+
+    .monthly-inputs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 8px 0;
+    }
+    .monthly-inputs > div {
+      min-width: 80px;
+      flex: 1 0 auto;
+    }
+    .monthly-inputs label {
+      font-size: 11px;
+      font-weight: 600;
+      display: block;
+    }
+    .monthly-inputs input {
+      width: 100%;
+      padding: 6px 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line);
+      font-size: 14px;
+      background: var(--surface-alt);
+    }
+
+    .planning-box {
+      padding: 15px;
+      background: var(--surface-alt);
+      border-radius: var(--radius-md);
+      margin-bottom: 15px;
+      border: 1px solid var(--line-soft);
+    }
+
+    .forecast-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin: 10px 0 15px 0;
+    }
+    .forecast-controls label {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--ink-500);
+      margin-right: 4px;
+    }
+    .forecast-controls select {
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line);
+      font-size: 14px;
+      background: var(--surface);
+    }
+
+    @media (max-width: 600px) {
+      body { margin: 5px auto; padding: 0 6px; }
+      .login-container { padding: 20px 15px; margin: 20px auto; }
+      .app-header { flex-direction: column; align-items: stretch; text-align: center; padding: 14px; }
+      .app-header .brand { justify-content: center; }
+      .app-header .brand-text { text-align: left; }
+      .user-info { justify-content: center; }
+      .tab-btn { padding: 8px 12px; font-size: 12px; }
+      .form-group { flex-direction: column; gap: 8px; }
+      .form-group > div { min-width: 100%; }
+      .form-group .btn { width: 100%; }
+      .import-box .import-row { flex-direction: column; }
+      .import-box .import-row > div { min-width: 100%; }
+      .user-info .btn { width: 100%; }
+      table { font-size: 12px; min-width: 300px; }
+      th, td { padding: 5px 6px; }
+      .btn-sm { padding: 4px 8px; font-size: 11px; }
+      .tab-content { padding: 12px 10px; }
+      .monthly-inputs > div { min-width: 60px; flex: 1 0 45%; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!-- ĐĂNG NHẬP -->
+<!-- ============================================================ -->
+<div id="loginSection" class="login-container">
+  <div class="login-brand">
+    <div class="login-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+    </div>
+    <h2>Đăng nhập</h2>
+    <p>Hệ thống quản lý kho nguyên vật liệu</p>
+  </div>
+  <div id="loginMessage"></div>
+
+  <input type="email" id="loginEmail" placeholder="Email" />
+  <input type="password" id="loginPassword" placeholder="Mật khẩu" />
+  <button class="btn btn-primary" id="loginBtn">Đăng nhập</button>
+
+  <hr />
+  <p>
+    Chưa có tài khoản? <a href="#" id="toggleRegisterLink">Đăng ký</a>
+  </p>
+
+  <div id="registerForm" class="hidden">
+    <input type="text" id="regEmployeeCode" placeholder="Mã nhân viên (VD: NV001)" />
+    <input type="text" id="regEmployeeName" placeholder="Họ và tên" />
+    <input type="email" id="regEmail" placeholder="Email" />
+    <input type="password" id="regPassword" placeholder="Mật khẩu (tối thiểu 6 ký tự)" />
+    <input type="password" id="regPasswordConfirm" placeholder="Xác nhận mật khẩu" />
+    <button class="btn btn-success" id="registerBtn">Đăng ký</button>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- ỨNG DỤNG CHÍNH -->
+<!-- ============================================================ -->
+<div id="appSection">
+  <div class="app-header">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z"/><path d="M3 7.5 12 12l9-4.5"/><path d="M12 12v9"/></svg>
+      </div>
+      <div class="brand-text">
+        <h1>Quản lý kho nguyên vật liệu</h1>
+        <span>Nhập xuất &middot; định mức &middot; kế hoạch mua hàng</span>
+      </div>
+    </div>
+    <div class="user-info">
+      <span class="user-pill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></svg>
+        <strong id="userEmailDisplay"></strong>
+        (<span id="userRoleDisplay" class="badge badge-worker">Công nhân</span>)
+        <span id="employeeInfoDisplay" class="emp-detail"></span>
+      </span>
+      <button class="btn btn-danger btn-sm" id="logoutBtn">Đăng xuất</button>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabContainer">
+    <button class="tab-btn active" data-tab="tab-items">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z"/><path d="M3 7.5 12 12l9-4.5"/><path d="M12 12v9"/></svg>
+      Hàng hóa
+    </button>
+    <button class="tab-btn" data-tab="tab-import">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v6a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-6"/><path d="M4 12h4l1.5 2.5h5L16 12h4"/><path d="M12 3v8"/><path d="M9 8l3 3 3-3"/></svg>
+      Nhập kho
+    </button>
+    <button class="tab-btn" data-tab="tab-export">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v6a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-6"/><path d="M4 12h4l1.5 2.5h5L16 12h4"/><path d="M12 11V3"/><path d="M9 6l3-3 3 3"/></svg>
+      Xuất kho
+    </button>
+    <button class="tab-btn" data-tab="tab-stock">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10"/><path d="M12 20V4"/><path d="M20 20v-7"/><path d="M2 20h20"/></svg>
+      Tồn kho
+    </button>
+    <button class="tab-btn" data-tab="tab-planning">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4"/><path d="M16 3v4"/><circle cx="15.5" cy="15.5" r="3.2"/><path d="M15.5 14v1.6l1.1.9"/></svg>
+      Kế hoạch
+    </button>
+    <button class="tab-btn hidden-tab" data-tab="tab-po" id="poTabAdmin">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="12" height="9"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="6.5" cy="18" r="1.7"/><circle cx="17" cy="18" r="1.7"/></svg>
+      Đơn mua hàng
+    </button>
+    <button class="tab-btn" data-tab="tab-report">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 7-8"/><path d="M15 6h5v5"/></svg>
+      Báo cáo
+    </button>
+    <button class="tab-btn hidden-tab" data-tab="tab-transactions" id="transTabAdmin">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h13"/><path d="M8 12h13"/><path d="M8 20h13"/><circle cx="3.5" cy="4" r="1.4"/><circle cx="3.5" cy="12" r="1.4"/><circle cx="3.5" cy="20" r="1.4"/></svg>
+      Quản lý GD
+    </button>
+  </div>
+
+  <!-- ===== TAB: HÀNG HÓA ===== -->
+  <div id="tab-items" class="tab-content active">
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z"/><path d="M3 7.5 12 12l9-4.5"/><path d="M12 12v9"/></svg> Quản lý danh mục hàng <span id="itemAdminOnly" class="hidden">(Chỉ Admin)</span></h3>
+
+    <div id="itemAdminControls" class="hidden">
+      <div class="form-group">
+        <div><label>Mã hàng:</label><input type="text" id="itemCode" placeholder="VD: NL001" /></div>
+        <div><label>Tên hàng:</label><input type="text" id="itemName" placeholder="Tên nguyên vật liệu" /></div>
+        <div><label>Đơn vị:</label><input type="text" id="itemUnit" placeholder="kg, cái, lít..." value="cái" /></div>
+        <div style="flex:2;"><label>Thông số KT:</label><input type="text" id="itemSpec" placeholder="VD: 2x2m, 50kg..." /></div>
+        <div><label>Lead time mua hàng (ngày):</label><input type="number" id="itemLeadTime" min="0" step="1" placeholder="VD: 20" /></div>
+        <button class="btn btn-success" id="addItemBtn">➕ Thêm</button>
+        <button class="btn btn-warning" id="resetItemBtn">🔄 Làm mới</button>
+      </div>
+
+      <div class="import-box">
+        <div class="import-row">
+          <div>
+            <label>📂 Import từ Excel/CSV:</label>
+            <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" />
+          </div>
+          <button class="btn btn-success" id="importExcelBtn" style="margin-top:18px;">📥 Import dữ liệu</button>
+          <button class="btn btn-warning" id="downloadTemplateBtn" style="margin-top:18px;">📄 Tải mẫu Excel</button>
+        </div>
+        <div id="importProgress" class="progress-text"></div>
+        <div id="importResult"></div>
+      </div>
+
+      <div id="itemMessage"></div>
+    </div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Mã</th>
+            <th>Tên</th>
+            <th>Đơn vị</th>
+            <th>Thông số KT</th>
+            <th>Lead time (ngày)</th>
+            <th>Hành động</th>
+          </tr>
+        </thead>
+        <tbody id="itemTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: SỬA MẶT HÀNG (thay cho prompt() liên tiếp) ===== -->
+  <div id="editItemModal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> Sửa mặt hàng</h3>
+      <div class="form-group">
+        <div><label>Mã hàng (không đổi được):</label><input type="text" id="editItemCode" disabled /></div>
+      </div>
+      <div class="form-group">
+        <div><label>Tên hàng:</label><input type="text" id="editItemName" /></div>
+      </div>
+      <div class="form-group">
+        <div><label>Đơn vị:</label><input type="text" id="editItemUnit" placeholder="kg, cái, lít..." /></div>
+      </div>
+      <div class="form-group">
+        <div><label>Thông số kỹ thuật:</label><input type="text" id="editItemSpec" placeholder="VD: 2x2m, 50kg..." /></div>
+      </div>
+      <div class="form-group">
+        <div><label>Lead time mua hàng (ngày):</label><input type="number" id="editItemLeadTime" min="0" step="1" /></div>
+      </div>
+      <div id="editItemMessage"></div>
+      <div class="modal-actions">
+        <button class="btn btn-warning" id="cancelEditItemBtn">Hủy</button>
+        <button class="btn btn-success" id="saveEditItemBtn">💾 Lưu thay đổi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TAB: NHẬP KHO ===== -->
+  <div id="tab-import" class="tab-content">
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v6a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-6"/><path d="M4 12h4l1.5 2.5h5L16 12h4"/><path d="M12 3v8"/><path d="M9 8l3 3 3-3"/></svg> Nhập kho</h3>
+    <div class="form-group">
+      <div>
+        <label>Nguồn nhập:</label>
+        <select id="importSourceType">
+          <option value="normal">Nhập thường</option>
+          <option value="po">Nhập từ đơn mua hàng (PO)</option>
+        </select>
+      </div>
+      <div id="importPoSelectWrap" class="hidden">
+        <label>Chọn đơn đang chờ về:</label>
+        <select id="importPoSelect"></select>
+      </div>
+    </div>
+    <p style="font-size:12px;color:var(--ink-500);margin:-4px 0 12px;">
+      Nếu mã hàng này đang có đơn mua hàng chờ về, hãy chọn "Nhập từ đơn mua hàng" thay vì "Nhập thường" —
+      hệ thống sẽ tự tất toán đơn tương ứng, tránh trường hợp vừa nhập kho tay vừa được cộng thêm khi quản lý xác nhận đơn.
+    </p>
+    <div class="form-group">
+      <div><label>Mã hàng:</label><select id="importItemCode"></select></div>
+      <div><label>Số lượng:</label><input type="number" id="importQty" min="1" value="1" /></div>
+      <div><label>Ngày nhập:</label><input type="date" id="importDate" /></div>
+      <button class="btn btn-success" id="importBtn">✅ Nhập kho</button>
+    </div>
+    <div id="importMessage"></div>
+
+    <h4 style="margin-top:16px;">📜 Lịch sử nhập gần đây</h4>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Mã</th>
+            <th>Số lượng</th>
+            <th>Ngày</th>
+            <th>Nhân viên</th>
+          </tr>
+        </thead>
+        <tbody id="importHistoryBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== TAB: XUẤT KHO ===== -->
+  <div id="tab-export" class="tab-content">
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v6a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-6"/><path d="M4 12h4l1.5 2.5h5L16 12h4"/><path d="M12 11V3"/><path d="M9 6l3-3 3 3"/></svg> Xuất kho</h3>
+    <div class="form-group">
+      <div><label>Mã hàng:</label><select id="exportItemCode"></select></div>
+      <div><label>Số lượng:</label><input type="number" id="exportQty" min="1" value="1" /></div>
+      <div><label>Ngày xuất:</label><input type="date" id="exportDate" /></div>
+      <button class="btn btn-warning" id="exportBtn">✅ Xuất kho</button>
+    </div>
+    <div id="exportMessage"></div>
+
+    <h4 style="margin-top:16px;">📜 Lịch sử xuất gần đây</h4>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Mã</th>
+            <th>Số lượng</th>
+            <th>Ngày</th>
+            <th>Nhân viên</th>
+          </tr>
+        </thead>
+        <tbody id="exportHistoryBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== TAB: TỒN KHO ===== -->
+  <div id="tab-stock" class="tab-content">
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10"/><path d="M12 20V4"/><path d="M20 20v-7"/><path d="M2 20h20"/></svg> Tồn kho hiện tại</h3>
+    <button class="btn btn-primary" id="refreshStockBtn">🔄 Làm mới</button>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th>Mã</th><th>Tên</th><th>Đơn vị</th><th>Tồn</th></tr></thead>
+        <tbody id="stockTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== TAB: KẾ HOẠCH & CẢNH BÁO ===== -->
+  <div id="tab-planning" class="tab-content">
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4"/><path d="M16 3v4"/><circle cx="15.5" cy="15.5" r="3.2"/><path d="M15.5 14v1.6l1.1.9"/></svg> Kế hoạch sản xuất &amp; Cảnh báo tồn kho <span id="planAdminOnly" class="hidden">(Chỉ Admin)</span></h3>
+
+    <div id="planAdminControls" class="hidden">
+
+      <!-- Phần nhập định mức cho từng mã -->
+      <div class="planning-box">
+        <h4 style="margin-bottom:10px;">⚙️ Định mức tiêu hao (pcs/kg)</h4>
+        <div class="form-group">
+          <div>
+            <label>Mã hàng:</label>
+            <select id="planItemCode"></select>
+          </div>
+          <div>
+            <label>Định mức (pcs/kg):</label>
+            <input type="number" id="consumptionRate" step="0.001" min="0" placeholder="VD: 0.1" />
+          </div>
+          <button class="btn btn-success" id="savePlanBtn">💾 Lưu định mức</button>
+        </div>
+        <div id="planMessage"></div>
+      </div>
+
+      <!-- Phần kế hoạch sản xuất chung -->
+      <div class="planning-box">
+        <h4 style="margin-bottom:10px;">📊 Kế hoạch sản xuất theo TUẦN (kg)</h4>
+        <p style="font-size:13px;color:#6c757d;margin-bottom:10px;">Nhập số kg dự kiến sản xuất mỗi tuần (tuần ISO, Thứ 2 - Chủ nhật). Áp dụng cho tất cả mã hàng.</p>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <button class="btn btn-primary btn-sm" id="prevWeeksBtn">◀ 16 tuần trước</button>
+          <span id="weekWindowLabel" style="font-weight:bold;"></span>
+          <button class="btn btn-primary btn-sm" id="nextWeeksBtn">16 tuần sau ▶</button>
+          <button class="btn btn-warning btn-sm" id="thisWeekBtn" style="margin-left:auto;">📍 Về tuần hiện tại</button>
+        </div>
+        <div id="weeklyProductionInputs" class="monthly-inputs"></div>
+        <button class="btn btn-primary" id="updateProductionBtn" style="margin-top:10px;">📊 Cập nhật kế hoạch</button>
+        <div id="productionMessage" style="margin-top:10px;"></div>
+
+        <h5 style="margin-top:20px;margin-bottom:8px;">📅 Tổng theo tháng (tham khảo, tự tính từ dữ liệu tuần)</h5>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr id="monthlyAggregateHeader"></tr></thead>
+            <tbody><tr id="monthlyAggregateBody"></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <hr />
+
+    <!-- Điều khiển dự báo -->
+    <div class="forecast-controls">
+      <label for="forecastWeeks">🔮 Số tuần dự báo:</label>
+      <select id="forecastWeeks">
+        <option value="6">6 tuần</option>
+        <option value="9" selected>9 tuần</option>
+        <option value="12">12 tuần</option>
+        <option value="16">16 tuần</option>
+      </select>
+      <button class="btn btn-primary" id="applyForecastBtn">📊 Áp dụng</button>
+      <button class="btn btn-success" id="exportPlanExcelBtn" style="margin-left:auto;">📊 Xuất Excel</button>
+    </div>
+
+    <!-- Bảng cảnh báo -->
+    <h4 id="alertsTitle">🚨 Cân đối vật tư theo tuần (dự báo 9 tuần tới)</h4>
+    <p style="font-size:12px;color:#6c757d;">Tồn cuối tuần trước tự động chuyển thành tồn đầu tuần sau (cộng dồn), có tính cả hàng đang đi đường (PO) và cảnh báo hạn đặt hàng dựa trên lead time.
+      Mã có vấn đề được xếp lên đầu danh sách. Số trong mỗi ô tuần là <strong>tồn cuối tuần đó</strong> (âm = số lượng đang thiếu). Bấm vào 1 dòng để xem chi tiết tồn đầu/về/nhu cầu từng tuần.</p>
+    <div class="mrp-toolbar">
+      <button class="btn btn-primary" id="refreshAlertsBtn">🔄 Làm mới</button>
+      <button class="btn btn-primary" id="expandAllAlertsBtn">⬇️ Mở tất cả</button>
+      <button class="btn btn-warning" id="collapseAllAlertsBtn">⬆️ Thu gọn tất cả</button>
+      <button class="btn btn-warning" id="toggleOkItemsBtn">👁️ Ẩn mã đã đủ hàng</button>
+    </div>
+    <div class="mrp-legend">
+      <span><span class="mrp-dot mrp-green"></span> Đủ</span>
+      <span><span class="mrp-dot mrp-yellow"></span> Sắp thiếu</span>
+      <span><span class="mrp-dot mrp-red"></span> Thiếu</span>
+    </div>
+    <div id="alertsList" class="mrp-list"></div>
+  </div>
+
+  <!-- ===== TAB: ĐƠN MUA HÀNG (PO) ===== -->
+  <div id="tab-po" class="tab-content">
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="12" height="9"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="6.5" cy="18" r="1.7"/><circle cx="17" cy="18" r="1.7"/></svg> Quản lý đơn mua hàng (hàng đang đi đường) <span style="font-size:12px;color:var(--ink-500);">(Chỉ Admin)</span></h3>
+    <p style="font-size:12.5px;color:var(--ink-500);margin-bottom:10px;">
+      Lưu ý: tab này chỉ để <strong>tạo/hủy</strong> đơn mua hàng. Khi hàng thực sự về kho, hãy vào tab
+      <strong>"Nhập kho"</strong> và chọn nguồn "Nhập từ đơn mua hàng (PO)" - đơn sẽ tự động được cập nhật,
+      tránh cộng tồn kho 2 lần cho cùng 1 lô hàng.
+    </p>
+
+    <div class="planning-box">
+      <div class="form-group">
+        <div>
+          <label>Mã hàng:</label>
+          <select id="poItemCode"></select>
+        </div>
+        <div><label>Số lượng:</label><input type="number" id="poQty" min="1" value="1" /></div>
+        <div><label>Ngày đặt:</label><input type="date" id="poOrderDate" /></div>
+        <div><label>Ngày dự kiến về:</label><input type="date" id="poExpectedDate" /></div>
+        <button class="btn btn-success" id="createPoBtn">➕ Tạo đơn</button>
+      </div>
+      <p style="font-size:12px;color:var(--ink-500);">Ngày dự kiến về sẽ tự tính theo lead time của mã hàng khi bạn chọn mã và ngày đặt, bạn có thể sửa lại nếu nhà cung cấp báo khác.</p>
+      <p style="font-size:12px;color:var(--accent-700);background:var(--accent-100);padding:8px 10px;border-radius:6px;">⚠️ Khi hàng về thực tế, KHÔNG xác nhận ở đây - vào tab <strong>"Nhập kho"</strong>, chọn "Nhập từ đơn mua hàng" để vừa nhập kho vừa tự động đóng đơn này, tránh bị cộng tồn kho 2 lần.</p>
+      <div id="poMessage"></div>
+    </div>
+
+    <button class="btn btn-primary" id="refreshPoBtn">🔄 Làm mới</button>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Mã hàng</th>
+            <th>Số lượng</th>
+            <th>Ngày đặt</th>
+            <th>Dự kiến về</th>
+            <th>Trạng thái</th>
+            <th>Hành động</th>
+          </tr>
+        </thead>
+        <tbody id="poTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== TAB: BÁO CÁO ===== -->
+  <div id="tab-report" class="tab-content">
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 7-8"/><path d="M15 6h5v5"/></svg> Báo cáo nhập – xuất – tồn theo tháng <span id="reportAdminOnly" class="hidden">(Chỉ Admin)</span></h3>
+    <div id="reportAdminControls" class="hidden">
+      <div class="form-group">
+        <div>
+          <label>Tháng:</label>
+          <select id="reportMonth">
+            <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+            <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+            <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+            <option value="10">10</option><option value="11">11</option><option value="12">12</option>
+          </select>
+        </div>
+        <div><label>Năm:</label><select id="reportYear"></select></div>
+        <button class="btn btn-primary" id="reportViewBtn">📊 Xem</button>
+        <button class="btn btn-success" id="reportExportExcelBtn">📊 Xuất Excel</button>
+        <button class="btn btn-info" id="reportExportCSVBtn">📥 Xuất CSV</button>
+      </div>
+    </div>
+    <div id="reportResult"></div>
+
+    <hr style="margin:28px 0;border:none;border-top:1px solid var(--line-soft);">
+
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4"/><path d="M16 3v4"/><circle cx="15.5" cy="15.5" r="3.2"/><path d="M15.5 14v1.6l1.1.9"/></svg> Dự báo nhu cầu vật tư theo kế hoạch sản xuất <span id="forecastAdminOnly" class="hidden">(Chỉ Admin)</span></h3>
+    <p style="font-size:12.5px;color:var(--ink-500);margin-bottom:10px;">Tính bằng kế hoạch sản xuất theo tuần (tab Kế hoạch) × định mức tiêu hao từng mã hàng, gộp theo tháng.</p>
+    <div id="forecastAdminControls" class="hidden">
+      <div class="form-group">
+        <div>
+          <label>Từ tháng:</label>
+          <select id="forecastFromMonth">
+            <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+            <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+            <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+            <option value="10">10</option><option value="11">11</option><option value="12">12</option>
+          </select>
+        </div>
+        <div><label>Năm:</label><select id="forecastFromYear"></select></div>
+        <div>
+          <label>Đến tháng:</label>
+          <select id="forecastToMonth">
+            <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+            <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+            <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+            <option value="10">10</option><option value="11">11</option><option value="12">12</option>
+          </select>
+        </div>
+        <div><label>Năm:</label><select id="forecastToYear"></select></div>
+      </div>
+      <div class="form-group">
+        <button class="btn btn-primary" id="forecastViewBtn">Xem dự báo</button>
+        <button class="btn btn-success" id="forecastExportExcelBtn">Xuất Excel</button>
+      </div>
+    </div>
+    <div id="forecastResult"></div>
+  </div>
+
+  <!-- ===== TAB: QUẢN LÝ GIAO DỊCH ===== -->
+  <div id="tab-transactions" class="tab-content">
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h13"/><path d="M8 12h13"/><path d="M8 20h13"/><circle cx="3.5" cy="4" r="1.4"/><circle cx="3.5" cy="12" r="1.4"/><circle cx="3.5" cy="20" r="1.4"/></svg> Quản lý giao dịch nhập/xuất <span id="transAdminOnly" class="hidden">(Chỉ Admin)</span></h3>
+    <div id="transAdminControls" class="hidden">
+      <div class="form-group">
+        <div><label>Lọc theo mã:</label><input type="text" id="filterTransactionCode" placeholder="Nhập mã hàng..." /></div>
+        <div><label>Loại:</label>
+          <select id="filterTransactionType">
+            <option value="all">Tất cả</option>
+            <option value="import">Nhập kho</option>
+            <option value="export">Xuất kho</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" id="refreshTransBtn">🔄 Làm mới</button>
+        <button class="btn btn-danger" id="clearAllTransBtn">🗑️ Xóa tất cả</button>
+      </div>
+      <div id="transactionMessage"></div>
+
+      <div class="table-wrapper" style="max-height:500px; overflow-y:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>STT</th>
+              <th>Mã hàng</th>
+              <th>Loại</th>
+              <th>Số lượng</th>
+              <th>Ngày</th>
+              <th>Nhân viên</th>
+              <th>Hành động</th>
+            </tr>
+          </thead>
+          <tbody id="transactionTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- JAVASCRIPT -->
+<!-- ============================================================ -->
+<script>
+  // ================================================================
+  // 1. CẤU HÌNH FIREBASE
+  // ================================================================
+  const firebaseConfig = {
+    apiKey: "AIzaSyCnWJYm4dPgmj0kajeUKFwSCOar3t2zwqk",
+    authDomain: "quanlykho-efda6.firebaseapp.com",
+    projectId: "quanlykho-efda6",
+    storageBucket: "quanlykho-efda6.firebasestorage.app",
+    messagingSenderId: "722568818534",
+    appId: "1:722568818534:web:6bd40b978d82e79692e2a7",
+    measurementId: "G-CH5SWC0CJK"
+  };
+
+  // ================================================================
+  // 2. BIẾN TOÀN CỤC
+  // ================================================================
+  let auth = null;
+  let db = null;
+  let currentUser = null;
+  let firebaseReady = false;
+  let appReady = false;
+
+  const ADMIN_EMAILS = ['admin@demo.com', 'nguyenvantung1203.hut@gmail.com'];
+
+  // ================================================================
+  // 3. KHỞI TẠO FIREBASE
+  // ================================================================
+  function initFirebase() {
+    try {
+      if (!firebase.apps || firebase.apps.length === 0) {
+        firebase.initializeApp(firebaseConfig);
+        console.log('✅ Firebase initialized');
+      }
+      auth = firebase.auth();
+      db = firebase.firestore();
+
+      db.enablePersistence({ synchronizeTabs: true })
+        .then(() => console.log('✅ Persistence enabled'))
+        .catch((err) => console.warn('⚠️ Persistence error:', err.code));
+
+      firebaseReady = true;
+      console.log('✅ Firebase ready');
+      return true;
+    } catch (error) {
+      console.error('❌ Firebase init error:', error);
+      firebaseReady = false;
+      return false;
+    }
+  }
+
+  initFirebase();
+  if (!firebaseReady) {
+    setTimeout(() => {
+      if (!firebaseReady) initFirebase();
+    }, 1000);
+  }
+
+  function isFirebaseReady() {
+    return firebaseReady && auth && db;
+  }
+
+  // ================================================================
+  // 4. HIỂN THỊ THÔNG BÁO
+  // ================================================================
+  function showLoginMessage(msg, type = 'error') {
+    const el = document.getElementById('loginMessage');
+    if (el) {
+      el.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+      setTimeout(() => { if (el) el.innerHTML = ''; }, 8000);
+    }
+  }
+
+  function showMessage(elementId, text, type = 'success') {
+    const el = document.getElementById(elementId);
+    if (el) {
+      el.innerHTML = `<div class="alert alert-${type}">${text}</div>`;
+      setTimeout(() => { if (el) el.innerHTML = ''; }, 6000);
+    }
+  }
+
+  // ================================================================
+  // 5. XỬ LÝ TOKEN
+  // ================================================================
+  function handleAuthError(error) {
+    if (error && (error.code === 'auth/invalid-credential' || error.code === 'auth/user-disabled')) {
+      console.warn('⚠️ Auth error, clearing local cache...');
+      try {
+        localStorage.removeItem('firebase:authUser:' + firebaseConfig.apiKey);
+        sessionStorage.clear();
+      } catch (e) {}
+      if (auth) auth.signOut();
+      showLoginMessage('⚠️ Lỗi xác thực. Đã xóa cache. Vui lòng đăng nhập lại.', 'warning');
+      return true;
+    }
+    return false;
+  }
+
+  // ================================================================
+  // 6. XÁC THỰC
+  // ================================================================
+  async function handleRegister() {
+    if (!isFirebaseReady()) {
+      showLoginMessage('⏳ Đang kết nối máy chủ... Vui lòng đợi!', 'info');
+      initFirebase();
+      setTimeout(() => {
+        if (isFirebaseReady()) {
+          showLoginMessage('✅ Đã kết nối! Thử đăng ký lại.', 'success');
+        }
+      }, 2000);
+      return;
+    }
+
+    const employeeCode = document.getElementById('regEmployeeCode').value.trim().toUpperCase();
+    const employeeName = document.getElementById('regEmployeeName').value.trim();
+    const email = document.getElementById('regEmail').value.trim();
+    const pwd = document.getElementById('regPassword').value;
+    const pwd2 = document.getElementById('regPasswordConfirm').value;
+
+    if (!employeeCode || !employeeName || !email || !pwd || pwd !== pwd2) {
+      showLoginMessage('Vui lòng nhập đầy đủ: Mã NV, Họ tên, Email và xác nhận mật khẩu!', 'error');
+      return;
+    }
+
+    if (pwd.length < 6) {
+      showLoginMessage('Mật khẩu phải có ít nhất 6 ký tự!', 'error');
+      return;
+    }
+
+    try {
+      showLoginMessage('⏳ Đang đăng ký...', 'info');
+      const userCredential = await auth.createUserWithEmailAndPassword(email, pwd);
+      const user = userCredential.user;
+
+      await db.collection('users').doc(user.uid).set({
+        employeeCode: employeeCode,
+        employeeName: employeeName,
+        email: email,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+
+      showLoginMessage('✅ Đăng ký thành công! Hãy đăng nhập.', 'success');
+      document.getElementById('registerForm').classList.add('hidden');
+      document.getElementById('regEmployeeCode').value = '';
+      document.getElementById('regEmployeeName').value = '';
+      document.getElementById('regEmail').value = '';
+      document.getElementById('regPassword').value = '';
+      document.getElementById('regPasswordConfirm').value = '';
+
+      await auth.signOut();
+    } catch (e) {
+      let msg = e.message;
+      if (e.code === 'auth/email-already-in-use') msg = 'Email đã được sử dụng!';
+      else if (e.code === 'auth/invalid-email') msg = 'Email không hợp lệ!';
+      else if (e.code === 'auth/weak-password') msg = 'Mật khẩu quá yếu! (>= 6 ký tự)';
+      showLoginMessage('❌ ' + msg, 'error');
+    }
+  }
+
+  async function handleLogin() {
+    if (!isFirebaseReady()) {
+      showLoginMessage('⏳ Đang kết nối máy chủ... Vui lòng đợi 3 giây!', 'info');
+      initFirebase();
+      setTimeout(() => {
+        if (isFirebaseReady()) {
+          showLoginMessage('✅ Đã kết nối! Nhấn "Đăng nhập" lại.', 'success');
+        } else {
+          showLoginMessage('❌ Không thể kết nối. Vui lòng tải lại trang!', 'error');
+        }
+      }, 2000);
+      return;
+    }
+
+    const email = document.getElementById('loginEmail').value.trim();
+    const pwd = document.getElementById('loginPassword').value;
+
+    if (!email || !pwd) {
+      showLoginMessage('Vui lòng nhập email và mật khẩu!', 'error');
+      return;
+    }
+
+    try {
+      localStorage.removeItem('firebase:authUser:' + firebaseConfig.apiKey);
+      sessionStorage.clear();
+    } catch (e) {}
+
+    try {
+      showLoginMessage('⏳ Đang đăng nhập...', 'info');
+      const userCredential = await auth.signInWithEmailAndPassword(email, pwd);
+      console.log('✅ Login successful:', userCredential.user.email);
+    } catch (e) {
+      console.error('Login error:', e);
+      if (e.code === 'auth/invalid-credential') {
+        try {
+          localStorage.removeItem('firebase:authUser:' + firebaseConfig.apiKey);
+          sessionStorage.clear();
+        } catch (ex) {}
+        showLoginMessage('❌ Lỗi cache. Đã xóa cache. Vui lòng thử lại!', 'warning');
+        return;
+      }
+      let msg = e.message;
+      if (e.code === 'auth/user-not-found') msg = 'Email không tồn tại. Vui lòng đăng ký!';
+      else if (e.code === 'auth/wrong-password') msg = 'Sai mật khẩu. Vui lòng thử lại!';
+      else if (e.code === 'auth/invalid-email') msg = 'Email không hợp lệ!';
+      else if (e.code === 'auth/too-many-requests') msg = 'Quá nhiều yêu cầu. Thử lại sau!';
+      else if (e.code === 'auth/network-request-failed') msg = 'Mất kết nối mạng. Kiểm tra Internet!';
+      showLoginMessage('❌ ' + msg, 'error');
+    }
+  }
+
+  function handleLogout() {
+    if (auth) {
+      auth.signOut();
+      try {
+        localStorage.removeItem('firebase:authUser:' + firebaseConfig.apiKey);
+        sessionStorage.clear();
+      } catch (e) {}
+      window.location.reload();
+    }
+  }
+
+  // ================================================================
+  // 7. LẮNG NGHE TRẠNG THÁI ĐĂNG NHẬP
+  // ================================================================
+  if (auth) {
+    auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        try {
+          await user.getIdToken(true);
+          console.log('✅ Token refreshed');
+        } catch (error) {
+          console.error('Token refresh error:', error);
+          if (handleAuthError(error)) return;
+        }
+
+        let employeeCode = '';
+        let employeeName = '';
+        try {
+          const doc = await db.collection('users').doc(user.uid).get();
+          if (doc.exists) {
+            const data = doc.data();
+            employeeCode = data.employeeCode || '';
+            employeeName = data.employeeName || '';
+          } else {
+            console.warn('⚠️ Không tìm thấy thông tin nhân viên cho user:', user.uid);
+          }
+        } catch (err) {
+          console.error('Lỗi lấy thông tin nhân viên:', err);
+        }
+
+        currentUser = {
+          uid: user.uid,
+          email: user.email,
+          employeeCode: employeeCode,
+          employeeName: employeeName,
+          role: ADMIN_EMAILS.includes(user.email) ? 'admin' : 'worker'
+        };
+
+        document.getElementById('loginSection').style.display = 'none';
+        document.getElementById('appSection').style.display = 'block';
+        document.getElementById('userEmailDisplay').textContent = user.email;
+
+        const roleEl = document.getElementById('userRoleDisplay');
+        roleEl.textContent = currentUser.role === 'admin' ? 'Admin' : 'Công nhân';
+        roleEl.className = currentUser.role === 'admin' ? 'badge badge-admin' : 'badge badge-worker';
+
+        const empInfo = document.getElementById('employeeInfoDisplay');
+        if (employeeCode && employeeName) {
+          empInfo.textContent = `| ${employeeCode} - ${employeeName}`;
+        } else {
+          empInfo.textContent = '| (Chưa cập nhật hồ sơ)';
+        }
+
+        const isAdmin = currentUser.role === 'admin';
+        const adminElements = ['itemAdminOnly', 'itemAdminControls', 'reportAdminOnly', 'reportAdminControls', 'transAdminOnly', 'transAdminControls', 'planAdminOnly', 'planAdminControls', 'forecastAdminOnly', 'forecastAdminControls'];
+        adminElements.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) {
+            if (isAdmin) el.classList.remove('hidden');
+            else el.classList.add('hidden');
+          }
+        });
+        const transTab = document.getElementById('transTabAdmin');
+        if (transTab) {
+          if (isAdmin) transTab.classList.remove('hidden-tab');
+          else transTab.classList.add('hidden-tab');
+        }
+        const poTab = document.getElementById('poTabAdmin');
+        if (poTab) {
+          if (isAdmin) poTab.classList.remove('hidden-tab');
+          else poTab.classList.add('hidden-tab');
+        }
+
+        clearItemRefCache();
+        await migrateStockFieldIfNeeded();
+
+        renderItems();
+        renderImportHistory();
+        renderExportHistory();
+        renderStock();
+        populateYearSelect();
+        renderReport();
+        populateForecastYearSelects();
+        if (isAdmin) {
+          renderAllTransactions();
+          populatePlanItemSelect();
+          loadPlanData(document.getElementById('planItemCode')?.value || '');
+          loadProductionPlan();
+          generateAlerts();
+        }
+
+        console.log('✅ Logged in:', user.email, 'Employee:', employeeCode, employeeName);
+      } else {
+        currentUser = null;
+        document.getElementById('loginSection').style.display = 'block';
+        document.getElementById('appSection').style.display = 'none';
+        console.log('👋 Logged out');
+      }
+    });
+  }
+
+  // ================================================================
+  // 8. HÀM TRUY XUẤT FIRESTORE
+  // ================================================================
+  async function getItems() {
+    if (!db) return [];
+    try {
+      const snapshot = await db.collection('items').get();
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (e) {
+      console.error('getItems error:', e);
+      return [];
+    }
+  }
+
+  async function getTransactions() {
+    if (!db) return [];
+    try {
+      const snapshot = await db.collection('transactions').orderBy('date', 'desc').get();
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (e) {
+      console.error('getTransactions error:', e);
+      return [];
+    }
+  }
+
+  // Tra cứu document ref của 1 mặt hàng theo mã (dùng cho transaction atomic).
+  // Có cache nhẹ trong phiên làm việc để tránh query lặp lại liên tục.
+  const _itemRefCache = new Map();
+  async function getItemRefByCode(code) {
+    if (_itemRefCache.has(code)) return _itemRefCache.get(code);
+    const snap = await db.collection('items').where('code', '==', code).limit(1).get();
+    const ref = snap.empty ? null : snap.docs[0].ref;
+    _itemRefCache.set(code, ref);
+    return ref;
+  }
+  function clearItemRefCache() { _itemRefCache.clear(); }
+
+  // Tồn kho được lưu sẵn trên document item (trường "stock"), cập nhật atomic
+  // mỗi lần nhập/xuất (xem importStock/exportStock). Hàm này chỉ đọc, KHÔNG
+  // quét lại toàn bộ lịch sử giao dịch mỗi lần gọi (tránh N+1 query).
+  // Nếu item cũ chưa có trường "stock" (tạo trước bản cập nhật này), tự động
+  // tính lại 1 lần từ lịch sử và ghi lại vào document để lần sau đọc trực tiếp.
+  async function getStock(itemCode) {
+    const ref = await getItemRefByCode(itemCode);
+    if (!ref) return 0;
+    const doc = await ref.get();
+    if (!doc.exists) return 0;
+    const data = doc.data();
+    if (typeof data.stock === 'number') return data.stock;
+
+    console.warn(`⚠️ Mặt hàng ${itemCode} chưa có trường "stock", đang tính lại từ lịch sử...`);
+    const trans = await getTransactions();
+    let totalIn = 0, totalOut = 0;
+    trans.forEach(t => {
+      if (t.itemCode === itemCode) {
+        if (t.type === 'import') totalIn += t.quantity;
+        else if (t.type === 'export') totalOut += t.quantity;
+      }
+    });
+    const computedStock = totalIn - totalOut;
+    try { await ref.update({ stock: computedStock }); } catch (e) { /* bỏ qua, hiển thị vẫn đúng */ }
+    return computedStock;
+  }
+
+  async function getMaterialPlan(itemCode) {
+    if (!db || !itemCode) return null;
+    try {
+      const doc = await db.collection('material_plans').doc(itemCode).get();
+      if (doc.exists) return doc.data();
+      return null;
+    } catch (e) {
+      console.error('getMaterialPlan error:', e);
+      return null;
+    }
+  }
+
+  async function getProductionPlan() {
+    if (!db) return null;
+    try {
+      const doc = await db.collection('production_plan').doc('current').get();
+      if (doc.exists) return doc.data();
+      return null;
+    } catch (e) {
+      console.error('getProductionPlan error:', e);
+      return null;
+    }
+  }
+
+  // ================================================================
+  // 8b. MIGRATE DỮ LIỆU CŨ: tính sẵn trường "stock" cho các item chưa có
+  // (chạy 1 lần duy nhất mỗi khi phát hiện còn item thiếu trường này,
+  // để các lần sau renderStock/generateAlerts không phải quét lại toàn bộ
+  // lịch sử giao dịch cho từng mặt hàng - tránh N+1 query).
+  // ================================================================
+  async function migrateStockFieldIfNeeded() {
+    try {
+      const items = await getItems();
+      const missing = items.filter(i => typeof i.stock !== 'number');
+      if (missing.length === 0) return;
+
+      console.log(`⏳ Đang khởi tạo trường "stock" cho ${missing.length} mặt hàng cũ...`);
+      const trans = await getTransactions();
+      const totals = {};
+      trans.forEach(t => {
+        if (!totals[t.itemCode]) totals[t.itemCode] = 0;
+        if (t.type === 'import') totals[t.itemCode] += t.quantity;
+        else if (t.type === 'export') totals[t.itemCode] -= t.quantity;
+      });
+
+      // Firestore batch tối đa 500 thao tác/lần -> chia nhỏ theo lô 400
+      for (let i = 0; i < missing.length; i += 400) {
+        const chunk = missing.slice(i, i + 400);
+        const batch = db.batch();
+        chunk.forEach(item => {
+          const ref = db.collection('items').doc(item.id);
+          batch.update(ref, { stock: totals[item.code] || 0 });
+        });
+        await batch.commit();
+      }
+      console.log('✅ Đã khởi tạo xong trường "stock".');
+    } catch (e) {
+      console.error('migrateStockFieldIfNeeded error:', e);
+    }
+  }
+
+  // ================================================================
+  // 9. HÀM SẮP XẾP MÃ HÀNG
+  // ================================================================
+  function sortItemsByCode(items) {
+    return [...items].sort((a, b) => {
+      const aNum = parseFloat(a.code);
+      const bNum = parseFloat(b.code);
+      if (!isNaN(aNum) && !isNaN(bNum)) {
+        return aNum - bNum;
+      }
+      return a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }
+
+  // ================================================================
+  // 10. QUẢN LÝ HÀNG HÓA
+  // ================================================================
+  async function renderItems() {
+    const items = await getItems();
+    const tbody = document.getElementById('itemTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    const isAdmin = currentUser && currentUser.role === 'admin';
+
+    if (items.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6">Chưa có hàng hóa.</td></tr>';
+      return;
+    }
+
+    const sortedItems = sortItemsByCode(items);
+
+    sortedItems.forEach(item => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><strong>${item.code}</strong></td>
+        <td>${item.name}</td>
+        <td>${item.unit}</td>
+        <td>${item.spec || ''}</td>
+        <td>${typeof item.leadTimeDays === 'number' ? item.leadTimeDays : 0}</td>
+        <td>
+          ${isAdmin ? `
+            <button class="btn btn-warning btn-sm edit-item-btn" data-id="${item.id}">✏️</button>
+            <button class="btn btn-danger btn-sm delete-item-btn" data-id="${item.id}">🗑️</button>
+          ` : '—'}
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    document.querySelectorAll('.edit-item-btn').forEach(btn => {
+      btn.addEventListener('click', function() { editItem(this.dataset.id); });
+    });
+    document.querySelectorAll('.delete-item-btn').forEach(btn => {
+      btn.addEventListener('click', function() { deleteItem(this.dataset.id); });
+    });
+
+    populateItemSelects(sortedItems);
+    populatePlanItemSelect(sortedItems);
+  }
+
+  async function populateItemSelects(items) {
+    if (!items) items = await getItems();
+    const sortedItems = sortItemsByCode(items);
+    const selects = ['importItemCode', 'exportItemCode'];
+    selects.forEach(id => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const currentVal = sel.value;
+      sel.innerHTML = '';
+      if (sortedItems.length === 0) {
+        sel.innerHTML = '<option value="">Chưa có hàng</option>';
+        return;
+      }
+      sortedItems.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.code;
+        opt.textContent = `${item.code} - ${item.name}`;
+        sel.appendChild(opt);
+      });
+      if (currentVal && sortedItems.some(i => i.code === currentVal)) {
+        sel.value = currentVal;
+      }
+    });
+  }
+
+  function populatePlanItemSelect(items) {
+    if (!items) {
+      getItems().then(list => populatePlanItemSelect(list));
+      return;
+    }
+    const sortedItems = sortItemsByCode(items);
+    const sel = document.getElementById('planItemCode');
+    if (!sel) return;
+    const currentVal = sel.value;
+    sel.innerHTML = '';
+    if (sortedItems.length === 0) {
+      sel.innerHTML = '<option value="">Chưa có hàng</option>';
+      return;
+    }
+    sortedItems.forEach(item => {
+      const opt = document.createElement('option');
+      opt.value = item.code;
+      opt.textContent = `${item.code} - ${item.name}`;
+      sel.appendChild(opt);
+    });
+    if (currentVal && sortedItems.some(i => i.code === currentVal)) {
+      sel.value = currentVal;
+    } else if (sortedItems.length > 0) {
+      sel.value = sortedItems[0].code;
+      loadPlanData(sel.value);
+    }
+  }
+
+  async function addItem() {
+    if (!currentUser || currentUser.role !== 'admin') {
+      showMessage('itemMessage', 'Bạn không có quyền!', 'error');
+      return;
+    }
+    const code = document.getElementById('itemCode').value.trim().toUpperCase();
+    const name = document.getElementById('itemName').value.trim();
+    const unit = document.getElementById('itemUnit').value.trim();
+    const spec = document.getElementById('itemSpec').value.trim();
+    const leadTimeRaw = parseInt(document.getElementById('itemLeadTime').value);
+    const leadTimeDays = !isNaN(leadTimeRaw) && leadTimeRaw >= 0 ? leadTimeRaw : 0;
+
+    if (!code || !name || !unit) {
+      showMessage('itemMessage', 'Vui lòng nhập đầy đủ!', 'error');
+      return;
+    }
+
+    const items = await getItems();
+    if (items.some(i => i.code === code)) {
+      showMessage('itemMessage', `Mã ${code} đã tồn tại!`, 'error');
+      return;
+    }
+
+    try {
+      await db.collection('items').add({ code, name, unit, spec: spec || '', stock: 0, leadTimeDays });
+      _itemRefCache.delete(code);
+      showMessage('itemMessage', `✅ Đã thêm hàng ${code}!`, 'success');
+      document.getElementById('itemCode').value = '';
+      document.getElementById('itemName').value = '';
+      document.getElementById('itemUnit').value = 'cái';
+      document.getElementById('itemSpec').value = '';
+      document.getElementById('itemLeadTime').value = '';
+      renderItems();
+      populatePlanItemSelect();
+      generateAlerts();
+    } catch (e) {
+      showMessage('itemMessage', 'Lỗi: ' + e.message, 'error');
+    }
+  }
+
+  async function deleteItem(id) {
+    if (!currentUser || currentUser.role !== 'admin') {
+      showMessage('itemMessage', 'Bạn không có quyền!', 'error');
+      return;
+    }
+    const items = await getItems();
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+
+    // Kiểm tra trước xem mã hàng này còn giao dịch lịch sử / đơn mua hàng (PO)
+    // đang mở không, để cảnh báo rõ ràng - tránh xóa "mất tích" dữ liệu mà
+    // admin không biết.
+    const transSnap = await db.collection('transactions').where('itemCode', '==', item.code).get();
+    const transCount = transSnap.size;
+    const poSnap = await db.collection('purchase_orders').where('itemCode', '==', item.code).get();
+    const poCount = poSnap.size;
+    const openPoCount = poSnap.docs.filter(d => d.data().status === 'ordered').length;
+
+    const detailParts = [];
+    if (transCount > 0) detailParts.push(`${transCount} giao dịch nhập/xuất`);
+    if (poCount > 0) detailParts.push(`${poCount} đơn mua hàng (PO)${openPoCount > 0 ? `, trong đó ${openPoCount} đơn đang đi đường` : ''}`);
+
+    const confirmMsg = detailParts.length > 0
+      ? `Mặt hàng ${item.code} đang có ${detailParts.join(' và ')}.\nXóa sẽ xóa LUÔN toàn bộ dữ liệu liên quan (lịch sử giao dịch, định mức tiêu hao, đơn mua hàng) của mã này (không thể khôi phục).\nBạn có chắc chắn muốn xóa?`
+      : `Xóa mặt hàng ${item.code}?`;
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      // Xóa item + toàn bộ transactions + purchase_orders + material_plan liên
+      // quan trong các batch atomic, tránh để lại dữ liệu mồ côi (đặc biệt là
+      // PO "đang đi đường" trỏ tới mã hàng đã không còn tồn tại, vốn sẽ gây
+      // nhầm lẫn trong tab "Đơn mua hàng" nếu không dọn).
+      const CHUNK = 400; // Firestore batch giới hạn 500 thao tác/lần
+      const docsToDelete = [...transSnap.docs, ...poSnap.docs];
+      for (let i = 0; i < docsToDelete.length; i += CHUNK) {
+        const batch = db.batch();
+        docsToDelete.slice(i, i + CHUNK).forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+
+      const finalBatch = db.batch();
+      finalBatch.delete(db.collection('items').doc(id));
+      finalBatch.delete(db.collection('material_plans').doc(item.code));
+      await finalBatch.commit();
+
+      _itemRefCache.delete(item.code);
+      renderItems();
+      renderStock();
+      populatePlanItemSelect();
+      generateAlerts();
+      if (currentUser && currentUser.role === 'admin') renderPurchaseOrders();
+      showMessage('itemMessage', `✅ Đã xóa ${item.code}, ${transCount} giao dịch và ${poCount} đơn mua hàng liên quan!`, 'success');
+    } catch (e) {
+      showMessage('itemMessage', 'Lỗi: ' + e.message, 'error');
+    }
+  }
+
+  // Mã hàng đang được sửa trong modal (dùng khi bấm Lưu)
+  let _editingItemId = null;
+
+  // Mở modal sửa mặt hàng, đổ sẵn dữ liệu hiện tại vào form - thay cho chuỗi
+  // prompt() liên tiếp trước đây (khó dùng trên di động, không validate được).
+  async function editItem(id) {
+    if (!currentUser || currentUser.role !== 'admin') {
+      showMessage('itemMessage', 'Bạn không có quyền!', 'error');
+      return;
+    }
+    const items = await getItems();
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+
+    _editingItemId = id;
+    document.getElementById('editItemCode').value = item.code;
+    document.getElementById('editItemName').value = item.name || '';
+    document.getElementById('editItemUnit').value = item.unit || '';
+    document.getElementById('editItemSpec').value = item.spec || '';
+    document.getElementById('editItemLeadTime').value = typeof item.leadTimeDays === 'number' ? item.leadTimeDays : 0;
+    document.getElementById('editItemMessage').innerHTML = '';
+
+    document.getElementById('editItemModal').classList.remove('hidden');
+    document.getElementById('editItemName').focus();
+  }
+
+  function closeEditItemModal() {
+    _editingItemId = null;
+    document.getElementById('editItemModal').classList.add('hidden');
+  }
+
+  async function saveEditItem() {
+    if (!_editingItemId) return;
+    if (!currentUser || currentUser.role !== 'admin') {
+      showMessage('editItemMessage', 'Bạn không có quyền!', 'error');
+      return;
+    }
+
+    const newName = document.getElementById('editItemName').value.trim();
+    const newUnit = document.getElementById('editItemUnit').value.trim();
+    const newSpec = document.getElementById('editItemSpec').value.trim();
+    const newLeadTimeRaw = parseInt(document.getElementById('editItemLeadTime').value);
+
+    if (!newName) { showMessage('editItemMessage', 'Tên hàng không được để trống!', 'error'); return; }
+    if (!newUnit) { showMessage('editItemMessage', 'Đơn vị không được để trống!', 'error'); return; }
+    if (isNaN(newLeadTimeRaw) || newLeadTimeRaw < 0) { showMessage('editItemMessage', 'Lead time phải là số ngày không âm!', 'error'); return; }
+
+    try {
+      await db.collection('items').doc(_editingItemId).update({
+        name: newName,
+        unit: newUnit,
+        spec: newSpec,
+        leadTimeDays: newLeadTimeRaw
+      });
+      closeEditItemModal();
+      renderItems();
+      renderStock();
+      populatePlanItemSelect();
+      generateAlerts();
+      showMessage('itemMessage', '✅ Đã cập nhật!', 'success');
+    } catch (e) {
+      showMessage('editItemMessage', 'Lỗi: ' + e.message, 'error');
+    }
+  }
+
+  function resetItemForm() {
+    document.getElementById('itemCode').value = '';
+    document.getElementById('itemName').value = '';
+    document.getElementById('itemUnit').value = 'cái';
+    document.getElementById('itemSpec').value = '';
+    document.getElementById('itemLeadTime').value = '';
+    document.getElementById('itemMessage').innerHTML = '';
+  }
+
+  // ================================================================
+  // 11. IMPORT EXCEL
+  // ================================================================
+  function readExcelFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+          resolve(jsonData);
+        } catch (error) { reject(error); }
+      };
+      reader.onerror = function(error) { reject(error); };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  async function importFromExcel() {
+    const fileInput = document.getElementById('excelFileInput');
+    const progressEl = document.getElementById('importProgress');
+    if (!fileInput.files || fileInput.files.length === 0) {
+      showMessage('importResult', 'Vui lòng chọn file Excel!', 'error');
+      return;
+    }
+    if (!currentUser || currentUser.role !== 'admin') {
+      showMessage('importResult', 'Bạn không có quyền import!', 'error');
+      return;
+    }
+    const file = fileInput.files[0];
+    const validExtensions = ['.xlsx', '.xls', '.csv'];
+    const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    if (!validExtensions.includes(fileExt)) {
+      showMessage('importResult', 'Vui lòng chọn file Excel (.xlsx, .xls) hoặc CSV!', 'error');
+      return;
+    }
+    try {
+      progressEl.innerHTML = '⏳ Đang đọc file...';
+      const data = await readExcelFile(file);
+      if (!data || data.length === 0) {
+        showMessage('importResult', 'File không có dữ liệu!', 'error');
+        progressEl.innerHTML = '';
+        return;
+      }
+      progressEl.innerHTML = `⏳ Đang xử lý ${data.length} dòng dữ liệu...`;
+      const headers = Object.keys(data[0]);
+      const findColumn = (possibleNames) => {
+        for (const name of possibleNames) {
+          const found = headers.find(h => h.toLowerCase().trim() === name.toLowerCase().trim());
+          if (found) return found;
+        }
+        return null;
+      };
+      const codeCol = findColumn(['Mã', 'Mã hàng', 'Code', 'Mã số']);
+      const nameCol = findColumn(['Tên', 'Tên hàng', 'Name', 'Tên vật tư']);
+      const unitCol = findColumn(['Đơn vị', 'Unit', 'ĐVT']);
+      const specCol = findColumn(['Thông số KT', 'Thông số', 'Spec', 'Mô tả', 'Description']);
+      const leadTimeCol = findColumn(['Lead time', 'Lead time (ngày)', 'LeadTime', 'Thời gian mua hàng']);
+      if (!codeCol || !nameCol) {
+        showMessage('importResult', 'Không tìm thấy cột "Mã hàng" và "Tên hàng". Vui lòng kiểm tra file mẫu!', 'error');
+        progressEl.innerHTML = '';
+        return;
+      }
+      const validData = data.filter(row => {
+        const code = String(row[codeCol] || '').trim();
+        const name = String(row[nameCol] || '').trim();
+        return code && name;
+      });
+      if (validData.length === 0) {
+        showMessage('importResult', 'Không có dữ liệu hợp lệ (cần có Mã và Tên)!', 'error');
+        progressEl.innerHTML = '';
+        return;
+      }
+      const existingItems = await getItems();
+      const existingCodes = new Set(existingItems.map(i => i.code));
+      const duplicateCodes = [];
+      const newData = [];
+      validData.forEach(row => {
+        const code = String(row[codeCol]).trim().toUpperCase();
+        const name = String(row[nameCol]).trim();
+        const unit = unitCol ? String(row[unitCol] || '').trim() || 'cái' : 'cái';
+        const spec = specCol ? String(row[specCol] || '').trim() : '';
+        const leadTimeRaw = leadTimeCol ? parseInt(row[leadTimeCol]) : NaN;
+        const leadTimeDays = !isNaN(leadTimeRaw) && leadTimeRaw >= 0 ? leadTimeRaw : 0;
+        if (existingCodes.has(code)) {
+          duplicateCodes.push(code);
+        } else {
+          newData.push({ code, name, unit, spec, leadTimeDays });
+          existingCodes.add(code);
+        }
+      });
+      if (newData.length === 0) {
+        let msg = 'Tất cả dữ liệu đã tồn tại!';
+        if (duplicateCodes.length > 0) {
+          msg += ` (${duplicateCodes.slice(0, 10).join(', ')}${duplicateCodes.length > 10 ? ` và ${duplicateCodes.length - 10} mã khác` : ''})`;
+        }
+        showMessage('importResult', msg, 'warning');
+        progressEl.innerHTML = '';
+        return;
+      }
+      progressEl.innerHTML = `⏳ Đang import ${newData.length} mặt hàng mới...`;
+      // Ghi theo batch (thay vì add() từng dòng tuần tự) để nhanh hơn nhiều lần
+      // và đảm bảo mỗi lô ghi thành công trọn vẹn. Firestore giới hạn 500
+      // thao tác/batch nên chia nhỏ theo lô 400.
+      let successCount = 0;
+      let errorCount = 0;
+      const errors = [];
+      const CHUNK = 400;
+      for (let i = 0; i < newData.length; i += CHUNK) {
+        const chunk = newData.slice(i, i + CHUNK);
+        try {
+          const batch = db.batch();
+          chunk.forEach(item => {
+            const ref = db.collection('items').doc();
+            batch.set(ref, {
+              code: item.code,
+              name: item.name,
+              unit: item.unit || 'cái',
+              spec: item.spec || '',
+              stock: 0,
+              leadTimeDays: item.leadTimeDays || 0
+            });
+          });
+          await batch.commit();
+          successCount += chunk.length;
+        } catch (e) {
+          errorCount += chunk.length;
+          errors.push(`Lô ${i + 1}-${i + chunk.length}: ${e.message}`);
+        }
+        progressEl.innerHTML = `⏳ Đã import ${Math.min(i + CHUNK, newData.length)}/${newData.length}...`;
+      }
+      let resultMsg = `✅ Import thành công ${successCount} mặt hàng!`;
+      if (duplicateCodes.length > 0) {
+        resultMsg += `<br>⚠️ Bỏ qua ${duplicateCodes.length} mã đã tồn tại: ${duplicateCodes.slice(0, 10).join(', ')}${duplicateCodes.length > 10 ? ` và ${duplicateCodes.length - 10} mã khác` : ''}`;
+      }
+      if (errorCount > 0) {
+        resultMsg += `<br>❌ Lỗi ${errorCount} dòng: ${errors.slice(0, 5).join('; ')}${errors.length > 5 ? ` và ${errors.length - 5} lỗi khác` : ''}`;
+      }
+      showMessage('importResult', resultMsg, successCount > 0 ? 'success' : 'error');
+      progressEl.innerHTML = '✅ Hoàn tất!';
+      fileInput.value = '';
+      newData.forEach(item => _itemRefCache.delete(item.code));
+      renderItems();
+      renderStock();
+      populatePlanItemSelect();
+      generateAlerts();
+    } catch (error) {
+      console.error('Import error:', error);
+      showMessage('importResult', 'Lỗi: ' + error.message, 'error');
+      progressEl.innerHTML = '';
+    }
+  }
+
+  function downloadTemplate() {
+    const headers = ['Mã hàng', 'Tên hàng', 'Đơn vị', 'Thông số KT', 'Lead time (ngày)'];
+    const sampleData = [
+      ['NL001', 'Sắt tấm 2mm', 'tấm', '2000x1000x2mm', '20'],
+      ['NL002', 'Thép góc 50x50', 'cây', '50x50x5x6000mm', '15'],
+      ['NL003', 'Sơn chống gỉ', 'thùng', '18 lít - màu đỏ', '10'],
+    ];
+    const wsData = [headers, ...sampleData];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    ws['!cols'] = [
+      { wch: 15 },
+      { wch: 25 },
+      { wch: 12 },
+      { wch: 30 },
+      { wch: 16 }
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Danh sách hàng');
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/octet-stream' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'Mau_import_hang_hoa.xlsx';
+    link.click();
+  }
+
+  // ================================================================
+  // 12. NHẬP KHO
+  // ================================================================
+  // Đổ danh sách các đơn mua hàng đang "chờ về" (status='ordered') vào dropdown
+  // ở tab Nhập kho, để công nhân/quản lý chọn đúng đơn khi hàng thực về kho -
+  // đây là NƠI DUY NHẤT tạo giao dịch nhập kho gắn với 1 PO (xem importStock()).
+  async function populateImportPoSelect() {
+    const sel = document.getElementById('importPoSelect');
+    if (!sel) return;
+    const [pos, items] = await Promise.all([getPurchaseOrders(), getItems()]);
+    const openPos = pos.filter(p => p.status === 'ordered');
+    sel.innerHTML = '';
+    if (openPos.length === 0) {
+      sel.innerHTML = '<option value="">-- Không có đơn nào đang chờ về --</option>';
+      return;
+    }
+    // Tra tên hàng theo mã để hiển thị kèm trong dropdown, tránh phải nhớ mã số.
+    const nameByCode = {};
+    items.forEach(it => { nameByCode[it.code] = it.name; });
+
+    openPos.forEach(po => {
+      const opt = document.createElement('option');
+      opt.value = po.id;
+      opt.dataset.itemCode = po.itemCode;
+      opt.dataset.quantity = po.quantity;
+      const itemName = nameByCode[po.itemCode] || '';
+      opt.textContent = `${po.itemCode}${itemName ? ' - ' + itemName : ''} — còn ${po.quantity} — dự kiến ${po.expectedArrivalDate}`;
+      sel.appendChild(opt);
+    });
+    applySelectedPoToImportForm();
+  }
+
+  // Khi chọn 1 đơn PO cụ thể, tự điền sẵn mã hàng + số lượng còn lại của đơn
+  // đó vào form nhập kho. Số lượng vẫn cho sửa tay (để hỗ trợ nhận hàng nhiều
+  // đợt/partial), nhưng mã hàng bị khóa - tránh gắn nhầm giao dịch vào PO của
+  // 1 mã hàng khác.
+  function applySelectedPoToImportForm() {
+    const sel = document.getElementById('importPoSelect');
+    const itemSel = document.getElementById('importItemCode');
+    const qtyInput = document.getElementById('importQty');
+    if (!sel || !itemSel || !qtyInput) return;
+    const opt = sel.options[sel.selectedIndex];
+    if (!opt || !opt.value) return;
+    itemSel.value = opt.dataset.itemCode;
+    qtyInput.value = opt.dataset.quantity;
+    qtyInput.max = opt.dataset.quantity;
+  }
+
+  function resetImportSourceToNormal() {
+    const sourceSel = document.getElementById('importSourceType');
+    const poWrap = document.getElementById('importPoSelectWrap');
+    const itemSel = document.getElementById('importItemCode');
+    const qtyInput = document.getElementById('importQty');
+    if (sourceSel) sourceSel.value = 'normal';
+    if (poWrap) poWrap.classList.add('hidden');
+    if (itemSel) itemSel.disabled = false;
+    if (qtyInput) qtyInput.removeAttribute('max');
+  }
+
+  async function importStock() {
+    const sourceType = document.getElementById('importSourceType').value;
+    const isPoSource = sourceType === 'po';
+    let poId = null;
+
+    if (isPoSource) {
+      poId = document.getElementById('importPoSelect').value;
+      if (!poId) { showMessage('importMessage', 'Chọn đơn mua hàng đang chờ về!', 'error'); return; }
+    }
+
+    const code = document.getElementById('importItemCode').value;
+    const qty = parseInt(document.getElementById('importQty').value);
+    const date = document.getElementById('importDate').value;
+
+    if (!code) { showMessage('importMessage', 'Chọn mã hàng!', 'error'); return; }
+    if (!qty || qty <= 0) { showMessage('importMessage', 'Số lượng > 0!', 'error'); return; }
+    if (!date) { showMessage('importMessage', 'Chọn ngày!', 'error'); return; }
+
+    const employeeCode = currentUser ? currentUser.employeeCode : '';
+    const employeeName = currentUser ? currentUser.employeeName : '';
+
+    const itemRef = await getItemRefByCode(code);
+    if (!itemRef) { showMessage('importMessage', `Không tìm thấy mặt hàng ${code}!`, 'error'); return; }
+
+    const poRef = isPoSource ? db.collection('purchase_orders').doc(poId) : null;
+
+    try {
+      // Ghi giao dịch + cộng tồn kho + (nếu nhập từ PO) cập nhật/tất toán đơn
+      // mua hàng, TẤT CẢ trong CÙNG 1 Firestore transaction atomic - đây là
+      // lý do việc "hàng về" không còn 2 luồng tách rời như trước nữa: chỉ 1
+      // hành động nhập kho vừa ghi tồn kho vừa xử lý PO, không thể bị đúp.
+      await db.runTransaction(async (t) => {
+        // Firestore transaction bắt buộc đọc xong hết trước khi ghi.
+        let poData = null;
+        if (poRef) {
+          const poDoc = await t.get(poRef);
+          if (!poDoc.exists) throw new Error('Đơn mua hàng không còn tồn tại (có thể đã bị hủy). Vui lòng tải lại trang.');
+          poData = poDoc.data();
+          if (poData.status !== 'ordered') throw new Error('Đơn mua hàng này đã được xử lý xong rồi. Vui lòng tải lại trang.');
+          if (poData.itemCode !== code) throw new Error('Mã hàng không khớp với đơn mua hàng đã chọn.');
+          if (qty > poData.quantity) throw new Error(`Số lượng nhập (${qty}) vượt quá số còn lại của đơn hàng (${poData.quantity}).`);
+        }
+
+        const itemDoc = await t.get(itemRef);
+        if (!itemDoc.exists) throw new Error('Mặt hàng không còn tồn tại.');
+        const currentStock = itemDoc.data().stock || 0;
+
+        const newTransRef = db.collection('transactions').doc();
+        t.set(newTransRef, {
+          itemCode: code,
+          type: 'import',
+          quantity: qty,
+          date: date,
+          employeeCode: employeeCode,
+          employeeName: employeeName,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          ...(poRef ? { poId: poId, note: 'Nhập từ đơn mua hàng (PO)' } : {})
+        });
+        t.update(itemRef, { stock: currentStock + qty });
+
+        if (poRef) {
+          const remaining = poData.quantity - qty;
+          if (remaining <= 0) {
+            t.update(poRef, { quantity: 0, status: 'arrived', arrivedAt: firebase.firestore.FieldValue.serverTimestamp() });
+          } else {
+            t.update(poRef, { quantity: remaining });
+          }
+        }
+      });
+
+      showMessage('importMessage', `✅ Nhập ${code} +${qty} thành công!${isPoSource ? ' Đã cập nhật đơn mua hàng.' : ''}`, 'success');
+      document.getElementById('importQty').value = 1;
+      if (isPoSource) {
+        resetImportSourceToNormal();
+        renderPurchaseOrders();
+      }
+      renderImportHistory();
+      renderStock();
+      generateAlerts();
+    } catch (e) {
+      showMessage('importMessage', 'Lỗi: ' + e.message, 'error');
+    }
+  }
+
+  // Lấy N giao dịch gần nhất theo loại (import/export) bằng query có điều kiện
+  // + limit, thay vì tải toàn bộ collection transactions rồi lọc ở client.
+  // Lưu ý: query where + orderBy cần Firestore composite index; nếu chưa tạo,
+  // Firestore sẽ báo lỗi kèm link tự tạo index trong console - lúc đó hàm sẽ
+  // tự động dùng lại cách cũ (tải hết) để không làm gãy chức năng.
+  async function getRecentTransactionsByType(type, limitCount = 10) {
+    if (!db) return [];
+    try {
+      const snap = await db.collection('transactions')
+        .where('type', '==', type)
+        .orderBy('date', 'desc')
+        .limit(limitCount)
+        .get();
+      return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (e) {
+      console.warn('⚠️ Query tối ưu lịch sử giao dịch lỗi (có thể thiếu Firestore index), dùng cách dự phòng:', e.message);
+      const trans = await getTransactions();
+      return trans.filter(t => t.type === type).slice(0, limitCount);
+    }
+  }
+
+  async function renderImportHistory() {
+    const filtered = await getRecentTransactionsByType('import', 10);
+    const tbody = document.getElementById('importHistoryBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (filtered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4">Chưa có</td></tr>';
+      return;
+    }
+    filtered.forEach(t => {
+      const emp = t.employeeName ? `${t.employeeCode || ''} - ${t.employeeName}` : 'Không xác định';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${t.itemCode}</td><td>${t.quantity}</td><td>${t.date}</td><td>${emp}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // ================================================================
+  // 13. XUẤT KHO
+  // ================================================================
+  async function exportStock() {
+    const code = document.getElementById('exportItemCode').value;
+    const qty = parseInt(document.getElementById('exportQty').value);
+    const date = document.getElementById('exportDate').value;
+
+    if (!code) { showMessage('exportMessage', 'Chọn mã hàng!', 'error'); return; }
+    if (!qty || qty <= 0) { showMessage('exportMessage', 'Số lượng > 0!', 'error'); return; }
+    if (!date) { showMessage('exportMessage', 'Chọn ngày!', 'error'); return; }
+
+    const employeeCode = currentUser ? currentUser.employeeCode : '';
+    const employeeName = currentUser ? currentUser.employeeName : '';
+
+    const itemRef = await getItemRefByCode(code);
+    if (!itemRef) { showMessage('exportMessage', `Không tìm thấy mặt hàng ${code}!`, 'error'); return; }
+
+    try {
+      // Kiểm tra tồn kho VÀ trừ tồn kho trong cùng 1 transaction atomic, để
+      // tránh trường hợp 2 người cùng xuất 1 lúc làm tồn kho bị âm (race condition)
+      // khi kiểm tra "đủ tồn" và ghi giao dịch là 2 bước tách rời như trước đây.
+      await db.runTransaction(async (t) => {
+        const itemDoc = await t.get(itemRef);
+        if (!itemDoc.exists) throw new Error('Mặt hàng không còn tồn tại.');
+        const currentStock = itemDoc.data().stock || 0;
+        if (currentStock < qty) {
+          throw new Error(`Tồn không đủ! Có ${currentStock}`);
+        }
+
+        const newTransRef = db.collection('transactions').doc();
+        t.set(newTransRef, {
+          itemCode: code,
+          type: 'export',
+          quantity: qty,
+          date: date,
+          employeeCode: employeeCode,
+          employeeName: employeeName,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        t.update(itemRef, { stock: currentStock - qty });
+      });
+
+      showMessage('exportMessage', `✅ Xuất ${code} -${qty} thành công!`, 'success');
+      document.getElementById('exportQty').value = 1;
+      renderExportHistory();
+      renderStock();
+      generateAlerts();
+    } catch (e) {
+      showMessage('exportMessage', 'Lỗi: ' + e.message, 'error');
+    }
+  }
+
+  async function renderExportHistory() {
+    const filtered = await getRecentTransactionsByType('export', 10);
+    const tbody = document.getElementById('exportHistoryBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (filtered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4">Chưa có</td></tr>';
+      return;
+    }
+    filtered.forEach(t => {
+      const emp = t.employeeName ? `${t.employeeCode || ''} - ${t.employeeName}` : 'Không xác định';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${t.itemCode}</td><td>${t.quantity}</td><td>${t.date}</td><td>${emp}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // ================================================================
+  // 14. TỒN KHO
+  // ================================================================
+  async function renderStock() {
+    const items = await getItems();
+    const tbody = document.getElementById('stockTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (items.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4">Chưa có hàng</td></tr>';
+      return;
+    }
+
+    const sortedItems = sortItemsByCode(items);
+
+    // Đọc trực tiếp item.stock (đã có sẵn từ getItems(), cập nhật atomic khi
+    // nhập/xuất) thay vì gọi getStock() riêng cho từng dòng - tránh N+1 query.
+    sortedItems.forEach(item => {
+      const stock = typeof item.stock === 'number' ? item.stock : 0;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><strong>${item.code}</strong></td><td>${item.name}</td><td>${item.unit}</td><td><strong>${stock}</strong></td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // ================================================================
+  // 15. KẾ HOẠCH & ĐỊNH MỨC
+  // ================================================================
+  // ================================================================
+  // 15c. TIỆN ÍCH TUẦN ISO (YYYY-Www, tuần bắt đầu Thứ 2)
+  // ================================================================
+  // Tính key tuần ISO của 1 ngày, chuẩn ISO 8601 (Thứ 5 quyết định năm/tuần)
+  function getISOWeekKey(date) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = (d.getUTCDay() + 6) % 7; // Mon=0 .. Sun=6
+    d.setUTCDate(d.getUTCDate() - dayNum + 3); // chuyển về Thứ 5 của tuần này
+    const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+    const firstDayNum = (firstThursday.getUTCDay() + 6) % 7;
+    firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNum + 3);
+    const weekNum = 1 + Math.round((d - firstThursday) / (7 * 24 * 3600 * 1000));
+    return d.getUTCFullYear() + '-W' + String(weekNum).padStart(2, '0');
+  }
+
+  // Ngày Thứ 2 (đầu tuần) của 1 weekKey "YYYY-Www"
+  function getISOWeekMonday(weekKey) {
+    const [yearStr, wStr] = weekKey.split('-W');
+    const year = parseInt(yearStr);
+    const week = parseInt(wStr);
+    const jan4 = new Date(Date.UTC(year, 0, 4));
+    const jan4DayNum = (jan4.getUTCDay() + 6) % 7;
+    const week1Monday = new Date(jan4);
+    week1Monday.setUTCDate(jan4.getUTCDate() - jan4DayNum);
+    const monday = new Date(week1Monday);
+    monday.setUTCDate(week1Monday.getUTCDate() + (week - 1) * 7);
+    return monday;
+  }
+
+  function formatDateShort(d) {
+    return String(d.getUTCDate()).padStart(2, '0') + '/' + String(d.getUTCMonth() + 1).padStart(2, '0');
+  }
+
+  // Nhãn hiển thị: "Tuần 28/2026 (07/07 - 13/07)"
+  function formatWeekLabel(weekKey) {
+    const monday = getISOWeekMonday(weekKey);
+    const sunday = new Date(monday);
+    sunday.setUTCDate(monday.getUTCDate() + 6);
+    const [year, w] = weekKey.split('-W');
+    return `Tuần ${w}/${year} (${formatDateShort(monday)} - ${formatDateShort(sunday)})`;
+  }
+
+  // Danh sách N tuần liên tiếp bắt đầu từ "offsetWeeks" tuần kể từ tuần hiện tại
+  function buildWeekKeysFromOffset(count, offsetWeeks) {
+    const today = new Date();
+    const keys = [];
+    for (let i = 0; i < count; i++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() + (offsetWeeks + i) * 7);
+      keys.push(getISOWeekKey(d));
+    }
+    return keys;
+  }
+
+  // Danh sách N tuần tới tính từ tuần hiện tại (offset 0) - dùng cho cảnh báo
+  function buildWeekKeys(count) {
+    return buildWeekKeysFromOffset(count, 0);
+  }
+
+  // Tháng (YYYY-MM) chứa ngày Thứ 2 của 1 tuần - dùng để gộp tổng theo tháng
+  function weekKeyToMonthKey(weekKey) {
+    const monday = getISOWeekMonday(weekKey);
+    return monday.getUTCFullYear() + '-' + String(monday.getUTCMonth() + 1).padStart(2, '0');
+  }
+
+  // Chuyển 1 chuỗi ngày "YYYY-MM-DD" (VD ngày giao dịch, ngày PO) sang weekKey
+  function dateStrToWeekKey(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return getISOWeekKey(new Date(Date.UTC(y, m - 1, d)));
+  }
+
+  function daysInWeek() { return 7; }
+
+  // --- Định mức riêng từng mã ---
+  async function loadPlanData(itemCode) {
+    if (!itemCode) return;
+    try {
+      const doc = await db.collection('material_plans').doc(itemCode).get();
+      if (doc.exists) {
+        const data = doc.data();
+        document.getElementById('consumptionRate').value = data.consumptionRate || '';
+      } else {
+        document.getElementById('consumptionRate').value = '';
+      }
+    } catch (e) {
+      console.error('loadPlanData error:', e);
+    }
+  }
+
+  async function saveMaterialPlan() {
+    const itemCode = document.getElementById('planItemCode').value;
+    const consumptionRate = parseFloat(document.getElementById('consumptionRate').value);
+
+    if (!itemCode) {
+      showMessage('planMessage', 'Vui lòng chọn mã hàng!', 'error');
+      return;
+    }
+    if (isNaN(consumptionRate) || consumptionRate < 0) {
+      showMessage('planMessage', 'Định mức phải là số không âm (pcs/kg)!', 'error');
+      return;
+    }
+
+    try {
+      await db.collection('material_plans').doc(itemCode).set({
+        itemCode: itemCode,
+        consumptionRate: consumptionRate,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      showMessage('planMessage', `✅ Đã lưu định mức cho ${itemCode}: ${consumptionRate} pcs/kg`, 'success');
+      generateAlerts();
+    } catch (e) {
+      showMessage('planMessage', 'Lỗi: ' + e.message, 'error');
+    }
+  }
+
+  // --- Kế hoạch sản xuất chung (theo TUẦN, cửa sổ cuộn 16 tuần) ---
+  let weekWindowOffset = 0; // số tuần lệch so với tuần hiện tại, của đầu cửa sổ đang hiển thị
+  const WEEK_WINDOW_SIZE = 16;
+  let _cachedProductionPlanData = null; // cache để không mất dữ liệu tuần ngoài cửa sổ khi lưu
+
+  function renderWeeklyProductionInputs(planData) {
+    const container = document.getElementById('weeklyProductionInputs');
+    if (!container) return;
+    container.innerHTML = '';
+    const weekKeys = buildWeekKeysFromOffset(WEEK_WINDOW_SIZE, weekWindowOffset);
+    weekKeys.forEach(weekKey => {
+      const div = document.createElement('div');
+      const label = document.createElement('label');
+      label.textContent = formatWeekLabel(weekKey);
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.min = '0';
+      input.step = '1';
+      input.value = planData?.weeklyProduction?.[weekKey] !== undefined ? planData.weeklyProduction[weekKey] : '';
+      input.dataset.week = weekKey;
+      input.placeholder = '0';
+      div.appendChild(label);
+      div.appendChild(input);
+      container.appendChild(div);
+    });
+
+    const labelEl = document.getElementById('weekWindowLabel');
+    if (labelEl && weekKeys.length > 0) {
+      labelEl.textContent = `${formatWeekLabel(weekKeys[0])}  →  ${formatWeekLabel(weekKeys[weekKeys.length - 1])}`;
+    }
+
+    renderMonthlyAggregateSummary(planData);
+  }
+
+  // Bảng tổng theo tháng CHỈ ĐỂ THAM KHẢO, tính tự động bằng cách gộp các tuần
+  // đã nhập (quy ước: 1 tuần được tính vào tháng chứa ngày Thứ 2 của tuần đó).
+  // Không lưu riêng - luôn suy ra từ weeklyProduction để tránh sai lệch dữ liệu.
+  function renderMonthlyAggregateSummary(planData) {
+    const headerRow = document.getElementById('monthlyAggregateHeader');
+    const bodyRow = document.getElementById('monthlyAggregateBody');
+    if (!headerRow || !bodyRow) return;
+    headerRow.innerHTML = '';
+    bodyRow.innerHTML = '';
+
+    const weeklyProduction = planData?.weeklyProduction || {};
+    const monthTotals = {};
+    Object.keys(weeklyProduction).forEach(weekKey => {
+      const monthKey = weekKeyToMonthKey(weekKey);
+      monthTotals[monthKey] = (monthTotals[monthKey] || 0) + (weeklyProduction[weekKey] || 0);
+    });
+    const sortedMonths = Object.keys(monthTotals).sort();
+    if (sortedMonths.length === 0) {
+      headerRow.innerHTML = '<th>Chưa có dữ liệu</th>';
+      return;
+    }
+    sortedMonths.forEach(monthKey => {
+      const th = document.createElement('th');
+      th.textContent = monthKey;
+      headerRow.appendChild(th);
+      const td = document.createElement('td');
+      td.textContent = monthTotals[monthKey];
+      bodyRow.appendChild(td);
+    });
+  }
+
+  async function loadProductionPlan() {
+    try {
+      const doc = await db.collection('production_plan').doc('current').get();
+      _cachedProductionPlanData = doc.exists ? doc.data() : null;
+      renderWeeklyProductionInputs(_cachedProductionPlanData);
+    } catch (e) {
+      console.error('loadProductionPlan error:', e);
+      renderWeeklyProductionInputs(null);
+    }
+  }
+
+  async function updateProductionPlan() {
+    const inputs = document.querySelectorAll('#weeklyProductionInputs input');
+    // Merge với dữ liệu các tuần KHÔNG nằm trong cửa sổ đang xem, để không bị
+    // mất dữ liệu tuần khác khi chỉ đang hiển thị 1 phần của cả năm.
+    const weeklyProduction = { ...(_cachedProductionPlanData?.weeklyProduction || {}) };
+    inputs.forEach(input => {
+      const val = parseInt(input.value);
+      if (!isNaN(val) && val >= 0) {
+        weeklyProduction[input.dataset.week] = val;
+      } else if (input.value === '') {
+        delete weeklyProduction[input.dataset.week];
+      }
+    });
+
+    try {
+      await db.collection('production_plan').doc('current').set({
+        weeklyProduction: weeklyProduction,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      _cachedProductionPlanData = { ...(_cachedProductionPlanData || {}), weeklyProduction };
+      showMessage('productionMessage', '✅ Đã cập nhật kế hoạch sản xuất theo tuần!', 'success');
+      renderMonthlyAggregateSummary(_cachedProductionPlanData);
+      generateAlerts();
+    } catch (e) {
+      showMessage('productionMessage', 'Lỗi: ' + e.message, 'error');
+    }
+  }
+
+  function shiftWeekWindow(deltaWeeks) {
+    weekWindowOffset += deltaWeeks;
+    renderWeeklyProductionInputs(_cachedProductionPlanData);
+  }
+
+  function resetWeekWindowToToday() {
+    weekWindowOffset = 0;
+    renderWeeklyProductionInputs(_cachedProductionPlanData);
+  }
+
+  // ================================================================
+  // 15b. ĐƠN MUA HÀNG (PURCHASE ORDERS) - hàng đang đi đường
+  // ================================================================
+  async function getPurchaseOrders() {
+    if (!db) return [];
+    try {
+      const snap = await db.collection('purchase_orders').orderBy('expectedArrivalDate', 'asc').get();
+      return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (e) {
+      console.error('getPurchaseOrders error:', e);
+      return [];
+    }
+  }
+
+  async function populatePoItemSelect() {
+    const orderDateEl = document.getElementById('poOrderDate');
+    if (orderDateEl && !orderDateEl.value) {
+      orderDateEl.value = new Date().toISOString().split('T')[0];
+    }
+    const items = sortItemsByCode(await getItems());
+    const sel = document.getElementById('poItemCode');
+    if (!sel) return;
+    const currentVal = sel.value;
+    sel.innerHTML = '';
+    if (items.length === 0) {
+      sel.innerHTML = '<option value="">Chưa có hàng</option>';
+      return;
+    }
+    items.forEach(item => {
+      const opt = document.createElement('option');
+      opt.value = item.code;
+      opt.textContent = `${item.code} - ${item.name}`;
+      opt.dataset.leadtime = typeof item.leadTimeDays === 'number' ? item.leadTimeDays : 0;
+      sel.appendChild(opt);
+    });
+    if (currentVal) sel.value = currentVal;
+    suggestPoExpectedDate();
+  }
+
+  // Tự gợi ý ngày dự kiến về = ngày đặt + lead time của mã hàng (có thể sửa tay)
+  function suggestPoExpectedDate() {
+    const sel = document.getElementById('poItemCode');
+    const orderDateEl = document.getElementById('poOrderDate');
+    const expectedEl = document.getElementById('poExpectedDate');
+    if (!sel || !orderDateEl || !expectedEl) return;
+    const opt = sel.options[sel.selectedIndex];
+    const leadTime = opt ? (parseInt(opt.dataset.leadtime) || 0) : 0;
+    const orderDate = orderDateEl.value ? new Date(orderDateEl.value) : new Date();
+    const expected = new Date(orderDate);
+    expected.setDate(expected.getDate() + leadTime);
+    expectedEl.value = expected.toISOString().split('T')[0];
+  }
+
+  async function createPurchaseOrder() {
+    const code = document.getElementById('poItemCode').value;
+    const qty = parseInt(document.getElementById('poQty').value);
+    const orderDate = document.getElementById('poOrderDate').value;
+    const expectedDate = document.getElementById('poExpectedDate').value;
+
+    if (!code) { showMessage('poMessage', 'Chọn mã hàng!', 'error'); return; }
+    if (!qty || qty <= 0) { showMessage('poMessage', 'Số lượng > 0!', 'error'); return; }
+    if (!orderDate) { showMessage('poMessage', 'Chọn ngày đặt!', 'error'); return; }
+    if (!expectedDate) { showMessage('poMessage', 'Chọn ngày dự kiến về!', 'error'); return; }
+
+    try {
+      await db.collection('purchase_orders').add({
+        itemCode: code,
+        quantity: qty,
+        originalQuantity: qty, // giữ nguyên số gốc để hiển thị tiến độ khi nhận hàng nhiều đợt (partial)
+        orderDate: orderDate,
+        expectedArrivalDate: expectedDate,
+        status: 'ordered',
+        createdBy: currentUser ? currentUser.employeeCode : '',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      showMessage('poMessage', `✅ Đã tạo đơn mua ${qty} ${code}, dự kiến về ${expectedDate}!`, 'success');
+      document.getElementById('poQty').value = 1;
+      renderPurchaseOrders();
+      generateAlerts();
+    } catch (e) {
+      showMessage('poMessage', 'Lỗi: ' + e.message, 'error');
+    }
+  }
+
+  // ĐÃ GỠ hàm markPoArrived(): trước đây nút "Đã về" ở tab này tự tạo 1 giao
+  // dịch nhập kho + cộng tồn kho, HOÀN TOÀN ĐỘC LẬP với tab "Nhập kho" - nên
+  // nếu công nhân cũng nhập kho tay cho cùng lô hàng đó, tồn kho bị cộng 2
+  // lần. Giờ việc "hàng về" chỉ xảy ra qua 1 cửa duy nhất: tab Nhập kho, chọn
+  // nguồn "Nhập từ đơn mua hàng (PO)" (xem hàm importStock()).
+
+  async function cancelPurchaseOrder(poId) {
+    if (!confirm('Hủy đơn mua hàng này?')) return;
+    try {
+      await db.collection('purchase_orders').doc(poId).update({ status: 'cancelled' });
+      renderPurchaseOrders();
+      generateAlerts();
+      showMessage('poMessage', '✅ Đã hủy đơn hàng!', 'success');
+    } catch (e) {
+      showMessage('poMessage', 'Lỗi: ' + e.message, 'error');
+    }
+  }
+
+  async function renderPurchaseOrders() {
+    const pos = await getPurchaseOrders();
+    const tbody = document.getElementById('poTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    const activePos = pos.filter(p => p.status !== 'cancelled');
+    if (activePos.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6">Chưa có đơn mua hàng.</td></tr>';
+      return;
+    }
+    const todayStr = new Date().toISOString().split('T')[0];
+    activePos.forEach(po => {
+      const isOverdue = po.status === 'ordered' && po.expectedArrivalDate < todayStr;
+      const tr = document.createElement('tr');
+      if (isOverdue) tr.className = 'alert-danger';
+      else if (po.status === 'arrived') tr.className = 'alert-safe';
+
+      // originalQuantity chỉ có ở các PO tạo sau bản cập nhật này; PO cũ chưa
+      // có field này thì coi như chưa nhận đợt nào (received = 0).
+      const originalQty = typeof po.originalQuantity === 'number' ? po.originalQuantity : po.quantity;
+      const receivedQty = originalQty - po.quantity;
+      const progressNote = receivedQty > 0 ? ` (đã nhận ${receivedQty}/${originalQty})` : '';
+      const statusLabel = po.status === 'arrived'
+        ? '✅ Đã về đủ'
+        : (isOverdue ? `🔴 Quá hạn, chưa về${progressNote}` : `🚚 Đang đi đường${progressNote}`);
+
+      tr.innerHTML = `
+        <td><strong>${po.itemCode}</strong></td>
+        <td>${po.quantity}</td>
+        <td>${po.orderDate}</td>
+        <td>${po.expectedArrivalDate}</td>
+        <td>${statusLabel}</td>
+        <td>${po.status === 'ordered' ? `
+          <button class="btn btn-danger btn-sm po-cancel-btn" data-id="${po.id}">🗑️ Hủy</button>
+        ` : '—'}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    document.querySelectorAll('.po-cancel-btn').forEach(btn => {
+      btn.addEventListener('click', function() { cancelPurchaseOrder(this.dataset.id); });
+    });
+  }
+
+  // ================================================================
+  // 16. CẢNH BÁO - HỖ TRỢ NHIỀU TUẦN DỰ BÁO
+  // ================================================================
+  function getForecastWeeks() {
+    const sel = document.getElementById('forecastWeeks');
+    return parseInt(sel.value) || 9;
+  }
+
+  function updateAlertsTitle(weeks) {
+    const titleEl = document.getElementById('alertsTitle');
+    if (titleEl) {
+      titleEl.textContent = `🚨 Cân đối vật tư theo tuần (dự báo ${weeks} tuần tới)`;
+    }
+  }
+
+  // Gộp số lượng các PO đang "đang đi đường" (status='ordered') theo mã hàng
+  // và theo TUẦN dự kiến về (suy từ ngày dự kiến về), để cộng đúng vào đúng
+  // tuần trong bảng cân đối.
+  function buildIncomingByWeek(purchaseOrders) {
+    const map = {};
+    purchaseOrders.forEach(po => {
+      if (po.status !== 'ordered' || !po.expectedArrivalDate) return;
+      const weekKey = dateStrToWeekKey(po.expectedArrivalDate);
+      if (!map[po.itemCode]) map[po.itemCode] = {};
+      map[po.itemCode][weekKey] = (map[po.itemCode][weekKey] || 0) + po.quantity;
+    });
+    return map;
+  }
+
+  // Số lượng đã THỰC XUẤT từ đầu tuần "weekKey" (Thứ 2) đến nay, theo từng mã
+  // hàng. Dùng để trừ vào nhu cầu kế hoạch của tuần hiện tại (tránh trừ 2 lần:
+  // 1 lần vì tồn kho thực tế đã giảm do đã xuất, 1 lần nữa vì nhu cầu kế hoạch
+  // vẫn tính đủ cả tuần) - đây là điểm khiến số liệu "không on-time" nếu bỏ qua.
+  async function getConsumedSoFarThisWeek(weekKey) {
+    const monday = getISOWeekMonday(weekKey);
+    const startStr = monday.toISOString().split('T')[0];
+    const map = {};
+    try {
+      // Chỉ 1 query, giới hạn từ đầu tuần đến nay (không quét toàn bộ lịch sử)
+      const snap = await db.collection('transactions').where('date', '>=', startStr).get();
+      snap.forEach(doc => {
+        const t = doc.data();
+        if (t.type === 'export' && t.date && dateStrToWeekKey(t.date) === weekKey) {
+          map[t.itemCode] = (map[t.itemCode] || 0) + t.quantity;
+        }
+      });
+    } catch (e) {
+      console.warn('⚠️ getConsumedSoFarThisWeek lỗi, dùng cách dự phòng:', e.message);
+      const trans = await getTransactions();
+      trans.forEach(t => {
+        if (t.type === 'export' && t.date && dateStrToWeekKey(t.date) === weekKey) {
+          map[t.itemCode] = (map[t.itemCode] || 0) + t.quantity;
+        }
+      });
+    }
+    return map;
+  }
+
+  // ---- LÕI THUẬT TOÁN MRP: cân đối vật tư cuốn chiếu theo TUẦN ----
+  // Tồn cuối tuần W = Tồn đầu tuần W + Về trong tuần W - Nhu cầu tuần W
+  // Tồn cuối tuần W luôn trở thành Tồn đầu tuần W+1 (cộng dồn), nên tuần
+  // sau tự động phản ánh phần đã tiêu hao ở các tuần trước đó.
+  // RIÊNG tuần hiện tại (đang chạy dở): Nhu cầu = kế hoạch cả tuần TRỪ ĐI
+  // phần đã thực xuất từ đầu tuần đến nay, vì tồn kho thực tế (tồn đầu) đã
+  // phản ánh sẵn phần đã xuất đó rồi - nếu không trừ sẽ bị đếm 2 lần.
+  function computeItemWeeklyBalance(item, consumptionRate, weeklyProduction, incomingByWeek, weekKeys, consumedSoFarThisWeek, currentWeekKey) {
+    let openStock = typeof item.stock === 'number' ? item.stock : 0;
+    const rows = [];
+    weekKeys.forEach((weekKey, idx) => {
+      const incoming = (incomingByWeek[item.code] && incomingByWeek[item.code][weekKey]) || 0;
+      const plannedDemand = (weeklyProduction[weekKey] || 0) * consumptionRate;
+
+      let demand = plannedDemand;
+      let consumedSoFar = 0;
+      const isCurrentWeek = weekKey === currentWeekKey;
+      if (isCurrentWeek) {
+        consumedSoFar = (consumedSoFarThisWeek && consumedSoFarThisWeek[item.code]) || 0;
+        demand = Math.max(0, plannedDemand - consumedSoFar);
+      }
+
+      const closeStock = openStock + incoming - demand;
+      // Mức ưu tiên: tuần 1-3 (idx 0-2) = "cận kề", tuần 4 trở đi (idx >= 3)
+      // = "trong tầm xử lý" (còn kịp đặt hàng thêm nhờ lead time)
+      const weekNumber = idx + 1;
+      const priorityTier = weekNumber >= 4 ? 'action' : 'near';
+      rows.push({ weekKey, weekNumber, openStock, incoming, demand, plannedDemand, consumedSoFar, isCurrentWeek, closeStock, priorityTier });
+      openStock = closeStock;
+    });
+    return rows;
+  }
+
+  // Phân loại trạng thái: Thiếu (tồn cuối âm) / Sắp thiếu (còn dương nhưng
+  // không đủ cho nhu cầu tuần NGAY SAU đó) / Đủ.
+  function classifyWeekStatus(closeStock, nextWeekDemand) {
+    if (closeStock < 0) return { status: '🔴 Thiếu', cls: 'danger', shortage: -closeStock };
+    if (closeStock < nextWeekDemand) return { status: '🟡 Sắp thiếu', cls: 'warning', shortage: 0 };
+    return { status: '🟢 Đủ', cls: 'success', shortage: 0 };
+  }
+
+  // Hạn đặt hàng chậm nhất dựa trên lead time: nội suy ngày trong tuần (7
+  // ngày) mà tồn kho dự kiến chạm 0 (giả định sản xuất dùng đều trong tuần),
+  // rồi trừ đi lead time (ngày) để ra hạn đặt hàng chậm nhất. Nội suy theo
+  // tuần chính xác hơn nhiều so với theo tháng (sai số tối đa 7 ngày thay vì
+  // ~30 ngày).
+  function computeReorderDeadline(rows, leadTimeDays) {
+    for (const row of rows) {
+      if (row.closeStock < 0) {
+        const totalDays = 7;
+        let dayOffset;
+        if (row.openStock <= 0) {
+          dayOffset = 0;
+        } else if (row.demand <= 0) {
+          dayOffset = totalDays;
+        } else {
+          dayOffset = Math.max(0, Math.min(totalDays, (row.openStock / row.demand) * totalDays));
+        }
+        const monday = getISOWeekMonday(row.weekKey);
+        const stockoutDate = new Date(monday);
+        stockoutDate.setUTCDate(monday.getUTCDate() + Math.floor(dayOffset));
+        const latestOrderDate = new Date(stockoutDate);
+        latestOrderDate.setUTCDate(stockoutDate.getUTCDate() - (leadTimeDays || 0));
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const isOverdue = latestOrderDate < today;
+        const daysUntil = Math.round((latestOrderDate - today) / (1000 * 60 * 60 * 24));
+
+        return {
+          stockoutDate: stockoutDate.toISOString().split('T')[0],
+          latestOrderDate: latestOrderDate.toISOString().split('T')[0],
+          isOverdue,
+          daysUntil
+        };
+      }
+    }
+    return null;
+  }
+
+  async function refreshPlanningTab() {
+    await populatePlanItemSelect();
+    const currentCode = document.getElementById('planItemCode').value;
+    if (currentCode) {
+      await loadPlanData(currentCode);
+    }
+    await loadProductionPlan();
+    await generateAlerts();
+  }
+
+  // ================================================================
+  // 17. XUẤT BÁO CÁO KẾ HOẠCH EXCEL (MỚI)
+  // ================================================================
+  async function exportPlanExcel() {
+    try {
+      const items = await getItems();
+      if (items.length === 0) {
+        showMessage('planMessage', '⚠️ Chưa có dữ liệu hàng hóa!', 'warning');
+        return;
+      }
+
+      const planDoc = await db.collection('production_plan').doc('current').get();
+      const planData = planDoc.exists ? planDoc.data() : null;
+      if (!planData || !planData.weeklyProduction) {
+        showMessage('planMessage', '⚠️ Chưa có kế hoạch sản xuất theo tuần!', 'warning');
+        return;
+      }
+
+      const plansSnapshot = await db.collection('material_plans').get();
+      const planMap = {};
+      plansSnapshot.forEach(doc => {
+        planMap[doc.id] = doc.data();
+      });
+
+      const purchaseOrders = await getPurchaseOrders();
+      const incomingByWeek = buildIncomingByWeek(purchaseOrders);
+
+      const forecastWeeks = getForecastWeeks();
+      const weekKeys = buildWeekKeys(forecastWeeks);
+      const currentWeekKey = weekKeys[0];
+      const consumedSoFarThisWeek = await getConsumedSoFarThisWeek(currentWeekKey);
+      const nextWeekKey = buildWeekKeys(forecastWeeks + 1)[forecastWeeks];
+
+      // Chuẩn bị dữ liệu + tính trước bảng cân đối từng mã để sắp xếp ưu tiên
+      // (mã có vấn đề lên đầu) - dùng đúng logic cân đối như trên app.
+      const sortedItemsBase = sortItemsByCode(items);
+      const itemComputations = sortedItemsBase.map(item => {
+        const plan = planMap[item.code];
+        const consumptionRate = plan?.consumptionRate || 0;
+        const leadTimeDays = typeof item.leadTimeDays === 'number' ? item.leadTimeDays : 0;
+        const rows = computeItemWeeklyBalance(item, consumptionRate, planData.weeklyProduction, incomingByWeek, weekKeys, consumedSoFarThisWeek, currentWeekKey);
+        rows.forEach((row, idx) => {
+          const nextDemand = idx < rows.length - 1
+            ? rows[idx + 1].demand
+            : (planData.weeklyProduction[nextWeekKey] || 0) * consumptionRate;
+          row.cls = classifyWeekStatus(row.closeStock, nextDemand);
+        });
+        const reorder = computeReorderDeadline(rows, leadTimeDays);
+        const hasActionShortage = rows.some(r => r.priorityTier === 'action' && r.closeStock < 0);
+        const hasNearShortage = rows.some(r => r.priorityTier === 'near' && r.closeStock < 0);
+        const priorityRank = hasActionShortage ? 0 : (hasNearShortage ? 1 : 2);
+        return { item, consumptionRate, rows, reorder, priorityRank };
+      });
+      itemComputations.sort((a, b) => a.priorityRank - b.priorityRank || a.item.code.localeCompare(b.item.code));
+
+      // Excel data
+      const excelData = [];
+      const FIXED_COLS = 6; // Mã, Tên, ĐVT, Tồn hiện tại, Vấn đề đầu tiên, Hạn đặt hàng
+      const totalCols = FIXED_COLS + weekKeys.length * 4 - 1; // chỉ số cột cuối (0-based)
+
+      // Dòng 1-3: Tiêu đề chính
+      excelData.push(['BÁO CÁO KẾ HOẠCH SẢN XUẤT VÀ CÂN ĐỐI VẬT TƯ THEO TUẦN']);
+      excelData.push([`Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}`]);
+      excelData.push([`Số tuần dự báo: ${forecastWeeks} tuần`]);
+      excelData.push([]); // Dòng trống
+
+      // Bảng kế hoạch sản xuất tổng quan (chỉ hiện các tuần trong cửa sổ dự báo)
+      const planRow = ['KẾ HOẠCH SẢN XUẤT (kg)'];
+      weekKeys.forEach(wk => planRow.push(wk));
+      planRow.push('TỔNG');
+      excelData.push(planRow);
+
+      const planValues = [];
+      let totalPlan = 0;
+      weekKeys.forEach(wk => {
+        const val = planData.weeklyProduction[wk] || 0;
+        planValues.push(val);
+        totalPlan += val;
+      });
+      const planDataRow = ['Sản xuất dự kiến'];
+      planValues.forEach(v => planDataRow.push(v));
+      planDataRow.push(totalPlan);
+      excelData.push(planDataRow);
+      excelData.push([]); // Dòng trống
+
+      // ---- Bảng cân đối vật tư THEO TUẦN, dạng NGANG: mỗi mã 1 dòng, mỗi
+      // tuần là 1 nhóm 4 cột (Tồn đầu / Về trong tuần / Tiêu thụ / Tồn cuối).
+      // Dễ so sánh ngang giữa các tuần hơn kiểu "mỗi tuần 1 dòng" trước đây,
+      // và khớp với cách trình bày cân đối vật tư quen thuộc (dạng Excel truyền
+      // thống). Mã có vấn đề được xếp lên đầu bảng.
+      const mrpHeaderRowA = excelData.length; // dòng nhóm tuần (merge ngang)
+      const headerRowA = ['Mã hàng', 'Tên hàng', 'Đơn vị', 'Tồn hiện tại (pcs)', 'Vấn đề đầu tiên', 'Hạn đặt hàng chậm nhất'];
+      weekKeys.forEach((wk, i) => {
+        headerRowA.push(`Tuần ${i + 1} (${wk})`, '', '', '');
+      });
+      excelData.push(headerRowA);
+
+      const mrpHeaderRowB = excelData.length; // dòng tên cột con
+      const headerRowB = ['', '', '', '', '', ''];
+      weekKeys.forEach(() => {
+        headerRowB.push('Tồn đầu', 'Về trong tuần', 'Tiêu thụ', 'Tồn cuối');
+      });
+      excelData.push(headerRowB);
+
+      const dataStartRow = excelData.length;
+      const closeStockCellColors = []; // {r, c, rgb} - tô màu ô Tồn cuối theo trạng thái
+
+      itemComputations.forEach(({ item, rows, reorder }) => {
+        const firstIssueIdx = rows.findIndex(r => r.cls.cls !== 'success');
+        let firstIssueText;
+        if (firstIssueIdx === -1) {
+          firstIssueText = `Đủ hàng cả ${rows.length} tuần`;
+        } else {
+          const r = rows[firstIssueIdx];
+          const label = r.cls.cls === 'danger' ? 'Thiếu' : 'Sắp thiếu';
+          firstIssueText = `${label} từ Tuần ${r.weekNumber} (${r.weekKey})`;
+        }
+
+        let reorderText = 'Chưa cần';
+        if (reorder) {
+          reorderText = reorder.isOverdue
+            ? `ĐẶT NGAY (trễ ${Math.abs(reorder.daysUntil)} ngày)`
+            : `Trước ${reorder.latestOrderDate} (còn ${reorder.daysUntil} ngày)`;
+        }
+
+        const dataRow = [
+          item.code,
+          item.name,
+          item.unit,
+          typeof item.stock === 'number' ? item.stock : 0,
+          firstIssueText,
+          reorderText
+        ];
+
+        const currentRowIdx = excelData.length; // trước khi push, để tính đúng chỉ số dòng
+        rows.forEach((r, i) => {
+          dataRow.push(
+            Number(r.openStock.toFixed(2)),
+            Number(r.incoming.toFixed(2)),
+            Number(r.demand.toFixed(2)),
+            Number(r.closeStock.toFixed(2))
+          );
+          const closeStockCol = FIXED_COLS + i * 4 + 3;
+          const rgb = r.cls.cls === 'danger' ? 'FFF8D7DA' : r.cls.cls === 'warning' ? 'FFFFF3CD' : 'FFD4EDDA';
+          closeStockCellColors.push({ r: currentRowIdx, c: closeStockCol, rgb });
+        });
+
+        excelData.push(dataRow);
+      });
+      const dataEndRow = excelData.length - 1;
+
+      // Tạo workbook
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(excelData);
+
+      // Độ rộng cột: 6 cột cố định đầu + lặp lại 4 cột/tuần
+      ws['!cols'] = [
+        { wch: 12 }, // Mã
+        { wch: 26 }, // Tên
+        { wch: 9 },  // Đơn vị
+        { wch: 13 }, // Tồn hiện tại
+        { wch: 24 }, // Vấn đề đầu tiên
+        { wch: 26 }, // Hạn đặt hàng
+      ];
+      weekKeys.forEach(() => {
+        ws['!cols'].push({ wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 10 });
+      });
+
+      // Định dạng: màu nền header chính (dòng tiêu đề to trên cùng)
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const addr = XLSX.utils.encode_cell({ r: 0, c: C });
+        if (ws[addr]) {
+          if (!ws[addr].s) ws[addr].s = {};
+          ws[addr].s.alignment = { horizontal: 'center', vertical: 'center' };
+          ws[addr].s.font = { bold: true, size: 16 };
+          ws[addr].s.fill = { fgColor: { rgb: 'FF2C3E50' } };
+          ws[addr].s.color = { rgb: 'FFFFFFFF' };
+        }
+      }
+
+      // Tô màu cho dòng tiêu đề phụ (kế hoạch sản xuất tổng quan)
+      const planHeaderRow = 4;
+      for (let C = 0; C <= weekKeys.length + 1; C++) {
+        const addr = XLSX.utils.encode_cell({ r: planHeaderRow, c: C });
+        if (ws[addr]) {
+          if (!ws[addr].s) ws[addr].s = {};
+          ws[addr].s.font = { bold: true };
+          ws[addr].s.fill = { fgColor: { rgb: 'FF3498DB' } };
+          ws[addr].s.color = { rgb: 'FFFFFFFF' };
+          ws[addr].s.alignment = { horizontal: 'center', vertical: 'center' };
+        }
+      }
+
+      // Tô màu 2 dòng header của bảng cân đối (dòng nhóm tuần + dòng cột con)
+      [mrpHeaderRowA, mrpHeaderRowB].forEach(rIdx => {
+        for (let C = 0; C <= totalCols; C++) {
+          const addr = XLSX.utils.encode_cell({ r: rIdx, c: C });
+          if (ws[addr]) {
+            if (!ws[addr].s) ws[addr].s = {};
+            ws[addr].s.font = { bold: true };
+            ws[addr].s.fill = { fgColor: { rgb: 'FF2ECC71' } };
+            ws[addr].s.color = { rgb: 'FFFFFFFF' };
+            ws[addr].s.alignment = { horizontal: 'center', vertical: 'center', wrapText: true };
+          }
+        }
+      });
+
+      // Tô màu các ô "Tồn cuối" theo trạng thái (xanh/vàng/đỏ) - giống app
+      closeStockCellColors.forEach(({ r: rIdx, c: cIdx, rgb }) => {
+        const addr = XLSX.utils.encode_cell({ r: rIdx, c: cIdx });
+        if (ws[addr]) {
+          if (!ws[addr].s) ws[addr].s = {};
+          ws[addr].s.fill = { fgColor: { rgb } };
+          ws[addr].s.font = { bold: true };
+        }
+      });
+
+      // Thêm border cho toàn bộ bảng cân đối (từ dòng header tới dòng cuối)
+      const lastRow = excelData.length - 1;
+      for (let R = mrpHeaderRowA; R <= lastRow; R++) {
+        for (let C = 0; C <= totalCols; C++) {
+          const addr = XLSX.utils.encode_cell({ r: R, c: C });
+          if (ws[addr]) {
+            if (!ws[addr].s) ws[addr].s = {};
+            ws[addr].s.border = {
+              top: { style: 'thin' },
+              bottom: { style: 'thin' },
+              left: { style: 'thin' },
+              right: { style: 'thin' }
+            };
+          }
+        }
+      }
+
+      // Merge: tiêu đề chính + nhóm cột từng tuần (mỗi tuần gộp 4 cột con) +
+      // gộp dọc 6 cột cố định đầu (Mã, Tên, ĐVT, Tồn, Vấn đề, Hạn đặt hàng)
+      // qua 2 dòng header để không bị trống ô dòng dưới.
+      ws['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: totalCols } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: totalCols } },
+        { s: { r: 2, c: 0 }, e: { r: 2, c: totalCols } }
+      ];
+      for (let c = 0; c < FIXED_COLS; c++) {
+        ws['!merges'].push({ s: { r: mrpHeaderRowA, c }, e: { r: mrpHeaderRowB, c } });
+      }
+      weekKeys.forEach((wk, i) => {
+        const startCol = FIXED_COLS + i * 4;
+        ws['!merges'].push({ s: { r: mrpHeaderRowA, c: startCol }, e: { r: mrpHeaderRowA, c: startCol + 3 } });
+      });
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Kế hoạch');
+
+      // Xuất file
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      link.download = `Bao_cao_ke_hoach_${dateStr}.xlsx`;
+      link.click();
+
+      showMessage('planMessage', '✅ Đã xuất báo cáo kế hoạch thành công!', 'success');
+
+    } catch (error) {
+      console.error('Export plan Excel error:', error);
+      showMessage('planMessage', '❌ Lỗi xuất Excel: ' + error.message, 'error');
+    }
+  }
+
+  // ================================================================
+  // 18. BÁO CÁO THÁNG
+  // ================================================================
+  function populateYearSelect() {
+    const sel = document.getElementById('reportYear');
+    if (!sel) return;
+    const currentYear = new Date().getFullYear();
+    sel.innerHTML = '';
+    for (let y = currentYear - 5; y <= currentYear + 1; y++) {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = y;
+      sel.appendChild(opt);
+    }
+    sel.value = currentYear;
+  }
+
+  async function getReportData(month, year) {
+    const items = await getItems();
+    const transactions = await getTransactions();
+
+    const inMonth = transactions.filter(t => {
+      const d = new Date(t.date);
+      return d.getMonth() + 1 === month && d.getFullYear() === year;
+    });
+    const beforeMonth = transactions.filter(t => {
+      const d = new Date(t.date);
+      return d.getFullYear() < year || (d.getFullYear() === year && d.getMonth() + 1 < month);
+    });
+
+    const reportMap = {};
+    items.forEach(item => {
+      reportMap[item.code] = {
+        name: item.name || '',
+        unit: item.unit || '',
+        totalImport: 0,
+        totalExport: 0,
+        openingStock: 0,
+        closingStock: 0
+      };
+    });
+
+    inMonth.forEach(t => {
+      if (reportMap[t.itemCode]) {
+        if (t.type === 'import') reportMap[t.itemCode].totalImport += t.quantity;
+        else if (t.type === 'export') reportMap[t.itemCode].totalExport += t.quantity;
+      }
+    });
+
+    beforeMonth.forEach(t => {
+      if (reportMap[t.itemCode]) {
+        if (t.type === 'import') reportMap[t.itemCode].openingStock += t.quantity;
+        else if (t.type === 'export') reportMap[t.itemCode].openingStock -= t.quantity;
+      }
+    });
+
+    for (const code in reportMap) {
+      const r = reportMap[code];
+      r.closingStock = r.openingStock + r.totalImport - r.totalExport;
+    }
+
+    return { reportMap, month, year };
+  }
+
+  async function renderReport() {
+    const month = parseInt(document.getElementById('reportMonth').value);
+    const year = parseInt(document.getElementById('reportYear').value);
+    const { reportMap } = await getReportData(month, year);
+
+    const sortedCodes = sortItemsByCode(Object.keys(reportMap).map(code => ({ code }))).map(item => item.code);
+
+    let html = `<p><strong>📊 Báo cáo tháng ${month}/${year}</strong></p>`;
+    html += `<div class="table-wrapper"><table>
+      <thead><tr><th>Mã</th><th>Tên</th><th>Đơn vị</th><th>Tồn đầu</th><th>Tổng nhập</th><th>Tổng xuất</th><th>Tồn cuối</th></tr></thead>
+      <tbody>`;
+    let hasData = false;
+    for (const code of sortedCodes) {
+      const r = reportMap[code];
+      if (!r) continue;
+      if (r.totalImport === 0 && r.totalExport === 0 && r.openingStock === 0 && r.closingStock === 0) continue;
+      hasData = true;
+      html += `<tr><td>${code}</td><td>${r.name}</td><td>${r.unit}</td><td>${r.openingStock}</td><td>${r.totalImport}</td><td>${r.totalExport}</td><td><strong>${r.closingStock}</strong></td></tr>`;
+    }
+    html += `</tbody></table></div>`;
+    if (!hasData) html += `<p>Không có giao dịch trong tháng.</p>`;
+    document.getElementById('reportResult').innerHTML = html;
+    window._reportData = { month, year, data: reportMap };
+  }
+
+  // ================================================================
+  // 19. XUẤT BÁO CÁO EXCEL (cho báo cáo tháng)
+  // ================================================================
+  async function exportReportExcel() {
+    const month = parseInt(document.getElementById('reportMonth').value);
+    const year = parseInt(document.getElementById('reportYear').value);
+
+    try {
+      const { reportMap } = await getReportData(month, year);
+
+      const filteredCodes = Object.keys(reportMap).filter(code => {
+        const r = reportMap[code];
+        return r.totalImport !== 0 || r.totalExport !== 0 || r.openingStock !== 0 || r.closingStock !== 0;
+      });
+
+      if (filteredCodes.length === 0) {
+        showMessage('reportResult', '⚠️ Không có dữ liệu để xuất báo cáo!', 'warning');
+        return;
+      }
+
+      const sortedCodes = sortItemsByCode(filteredCodes.map(code => ({ code }))).map(item => item.code);
+
+      const excelData = [];
+      excelData.push(['Mã hàng', 'Tên hàng', 'Đơn vị', 'Tồn đầu tháng', 'Tổng nhập', 'Tổng xuất', 'Tồn cuối tháng']);
+
+      for (const code of sortedCodes) {
+        const r = reportMap[code];
+        excelData.push([
+          code,
+          r.name,
+          r.unit,
+          r.openingStock,
+          r.totalImport,
+          r.totalExport,
+          r.closingStock
+        ]);
+      }
+
+      const totalOpening = sortedCodes.reduce((sum, code) => sum + reportMap[code].openingStock, 0);
+      const totalImport = sortedCodes.reduce((sum, code) => sum + reportMap[code].totalImport, 0);
+      const totalExport = sortedCodes.reduce((sum, code) => sum + reportMap[code].totalExport, 0);
+      const totalClosing = sortedCodes.reduce((sum, code) => sum + reportMap[code].closingStock, 0);
+
+      excelData.push([
+        'TỔNG CỘNG',
+        '',
+        '',
+        totalOpening,
+        totalImport,
+        totalExport,
+        totalClosing
+      ]);
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(excelData);
+
+      ws['!cols'] = [
+        { wch: 15 },
+        { wch: 25 },
+        { wch: 12 },
+        { wch: 14 },
+        { wch: 14 },
+        { wch: 14 },
+        { wch: 14 }
+      ];
+
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const addr = XLSX.utils.encode_cell({ r: 0, c: C });
+        if (!ws[addr]) continue;
+        if (!ws[addr].s) ws[addr].s = {};
+        ws[addr].s.alignment = { horizontal: 'center', vertical: 'center' };
+        ws[addr].s.font = { bold: true };
+      }
+
+      const lastRow = excelData.length - 1;
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const addr = XLSX.utils.encode_cell({ r: lastRow, c: C });
+        if (!ws[addr]) continue;
+        if (!ws[addr].s) ws[addr].s = {};
+        ws[addr].s.font = { bold: true };
+        ws[addr].s.fill = { fgColor: { rgb: 'FFD3D3D3' } };
+      }
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Báo cáo tháng');
+
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `Bao_cao_kho_thang_${month}_${year}.xlsx`;
+      link.click();
+
+      showMessage('reportResult', `✅ Đã xuất báo cáo tháng ${month}/${year} thành công!`, 'success');
+
+    } catch (error) {
+      console.error('Export Excel error:', error);
+      showMessage('reportResult', '❌ Lỗi xuất Excel: ' + error.message, 'error');
+    }
+  }
+
+  function exportReportCSV() {
+    const data = window._reportData;
+    if (!data) {
+      showMessage('reportResult', '⚠️ Hãy nhấn "Xem" để tạo báo cáo trước!', 'warning');
+      return;
+    }
+    const rows = [['Mã', 'Tên', 'Đơn vị', 'Tồn đầu', 'Tổng nhập', 'Tổng xuất', 'Tồn cuối']];
+    const sortedCodes = sortItemsByCode(Object.keys(data.data).map(code => ({ code }))).map(item => item.code);
+    for (const code of sortedCodes) {
+      const r = data.data[code];
+      if (!r) continue;
+      rows.push([code, r.name, r.unit, r.openingStock, r.totalImport, r.totalExport, r.closingStock]);
+    }
+    const csv = rows.map(row => row.join(',')).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `baocao_${data.month}_${data.year}.csv`;
+    link.click();
+  }
+
+  // ================================================================
+  // 18b. DỰ BÁO NHU CẦU VẬT TƯ THEO KẾ HOẠCH SẢN XUẤT (theo tháng)
+  // ================================================================
+  // Công thức: nhu cầu tháng M của 1 mã = Σ (kế hoạch sản xuất tuần × định mức
+  // tiêu hao của mã đó), cộng dồn mọi tuần có Thứ 2 rơi vào tháng M - dùng
+  // đúng quy ước gộp tuần->tháng (weekKeyToMonthKey) mà tab Kế hoạch đang dùng,
+  // để số liệu khớp 100% với khung "kế hoạch sản xuất theo tuần".
+  function populateForecastYearSelects() {
+    const currentYear = new Date().getFullYear();
+    ['forecastFromYear', 'forecastToYear'].forEach(id => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      sel.innerHTML = '';
+      for (let y = currentYear - 1; y <= currentYear + 2; y++) {
+        const opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = y;
+        sel.appendChild(opt);
+      }
+    });
+    // Mặc định: từ tháng hiện tại đến 3 tháng sau (khớp cửa sổ nhập kế hoạch ~16 tuần)
+    const now = new Date();
+    document.getElementById('forecastFromMonth').value = now.getMonth() + 1;
+    document.getElementById('forecastFromYear').value = now.getFullYear();
+    const toDate = new Date(now.getFullYear(), now.getMonth() + 3, 1);
+    document.getElementById('forecastToMonth').value = toDate.getMonth() + 1;
+    document.getElementById('forecastToYear').value = toDate.getFullYear();
+  }
+
+  // Danh sách monthKey "YYYY-MM" liên tiếp từ (fromYear,fromMonth) đến (toYear,toMonth), bao gồm 2 đầu.
+  function buildMonthKeyRange(fromYear, fromMonth, toYear, toMonth) {
+    const keys = [];
+    let y = fromYear, m = fromMonth;
+    let guard = 0; // chặn vòng lặp vô hạn nếu lỡ nhập "đến" trước "từ"
+    while ((y < toYear || (y === toYear && m <= toMonth)) && guard < 36) {
+      keys.push(y + '-' + String(m).padStart(2, '0'));
+      m++;
+      if (m > 12) { m = 1; y++; }
+      guard++;
+    }
+    return keys;
+  }
+
+  async function computeForecastData(monthKeys) {
+    const [items, plansSnapshot, productionDoc] = await Promise.all([
+      getItems(),
+      db.collection('material_plans').get(),
+      db.collection('production_plan').doc('current').get()
+    ]);
+
+    const planMap = {};
+    plansSnapshot.forEach(doc => { planMap[doc.id] = doc.data(); });
+    const weeklyProduction = productionDoc.exists ? (productionDoc.data().weeklyProduction || {}) : {};
+
+    // Gộp sản lượng kế hoạch theo tháng 1 lần duy nhất (không phụ thuộc mã hàng)
+    const monthlyProductionTotals = {};
+    Object.keys(weeklyProduction).forEach(weekKey => {
+      const mk = weekKeyToMonthKey(weekKey);
+      monthlyProductionTotals[mk] = (monthlyProductionTotals[mk] || 0) + (weeklyProduction[weekKey] || 0);
+    });
+
+    const rows = sortItemsByCode(items).map(item => {
+      const plan = planMap[item.code];
+      const hasConfig = !!plan && plan.consumptionRate > 0;
+      const consumptionRate = plan?.consumptionRate || 0;
+      const stock = typeof item.stock === 'number' ? item.stock : 0;
+      const monthlyDemand = {};
+      let totalDemand = 0;
+      monthKeys.forEach(mk => {
+        const demand = (monthlyProductionTotals[mk] || 0) * consumptionRate;
+        monthlyDemand[mk] = demand;
+        totalDemand += demand;
+      });
+      return { item, hasConfig, stock, monthlyDemand, totalDemand };
+    });
+
+    return { rows, monthlyProductionTotals };
+  }
+
+  async function renderForecastReport() {
+    const fromMonth = parseInt(document.getElementById('forecastFromMonth').value);
+    const fromYear = parseInt(document.getElementById('forecastFromYear').value);
+    const toMonth = parseInt(document.getElementById('forecastToMonth').value);
+    const toYear = parseInt(document.getElementById('forecastToYear').value);
+
+    if (toYear < fromYear || (toYear === fromYear && toMonth < fromMonth)) {
+      showMessage('forecastResult', '⚠️ "Đến tháng" phải sau hoặc bằng "Từ tháng"!', 'warning');
+      return;
+    }
+
+    const monthKeys = buildMonthKeyRange(fromYear, fromMonth, toYear, toMonth);
+    const { rows } = await computeForecastData(monthKeys);
+
+    let html = `<p><strong>Dự báo nhu cầu vật tư từ ${fromMonth}/${fromYear} đến ${toMonth}/${toYear}</strong></p>`;
+    html += `<div class="table-wrapper"><table><thead><tr><th>Mã</th><th>Tên</th><th>Đơn vị</th><th>Tồn hiện tại</th>`;
+    monthKeys.forEach(mk => {
+      const [y, m] = mk.split('-');
+      html += `<th>Th.${parseInt(m)}/${y}</th>`;
+    });
+    html += `<th>Tổng nhu cầu cả kỳ</th><th>Dư / Thiếu dự kiến*</th></tr></thead><tbody>`;
+
+    rows.forEach(r => {
+      html += `<tr><td><strong>${r.item.code}</strong></td><td>${r.item.name}</td><td>${r.item.unit}</td><td><strong>${r.stock}</strong></td>`;
+      if (!r.hasConfig) {
+        monthKeys.forEach(() => { html += `<td><span class="mrp-config-warn" title="Chưa nhập định mức tiêu hao cho mã này nên không tính được nhu cầu">Chưa có định mức</span></td>`; });
+        html += `<td colspan="2" style="color:var(--ink-300);">—</td>`;
+      } else {
+        monthKeys.forEach(mk => { html += `<td>${r.monthlyDemand[mk].toFixed(2)}</td>`; });
+        const balance = r.stock - r.totalDemand;
+        const balanceColor = balance < 0 ? 'var(--danger-700)' : 'var(--ok-700)';
+        html += `<td><strong>${r.totalDemand.toFixed(2)}</strong></td><td><strong style="color:${balanceColor}">${balance.toFixed(2)}</strong></td>`;
+      }
+      html += `</tr>`;
+    });
+    html += `</tbody></table></div>`;
+    html += `<p style="font-size:11.5px;color:var(--ink-300);margin-top:8px;">* So tồn kho hiện tại với TỔNG nhu cầu cả giai đoạn đã chọn, CHƯA cộng hàng dự kiến nhập thêm trong kỳ. Để xem cảnh báo chi tiết theo từng tuần có tính cả hàng đang đi đường, xem tab "Kế hoạch".</p>`;
+
+    document.getElementById('forecastResult').innerHTML = html;
+    window._forecastReportData = { fromMonth, fromYear, toMonth, toYear, monthKeys, rows };
+  }
+
+  async function exportForecastReportExcel() {
+    const data = window._forecastReportData;
+    if (!data) {
+      showMessage('forecastResult', '⚠️ Hãy nhấn "Xem dự báo" trước khi xuất Excel!', 'warning');
+      return;
+    }
+    try {
+      const { monthKeys, rows } = data;
+      const header = ['Mã hàng', 'Tên hàng', 'Đơn vị', 'Tồn hiện tại'];
+      monthKeys.forEach(mk => {
+        const [y, m] = mk.split('-');
+        header.push(`Th.${parseInt(m)}/${y}`);
+      });
+      header.push('Tổng nhu cầu cả kỳ', 'Dư/Thiếu dự kiến');
+
+      const excelData = [header];
+      rows.forEach(r => {
+        const row = [r.item.code, r.item.name, r.item.unit, r.stock];
+        if (!r.hasConfig) {
+          monthKeys.forEach(() => row.push('Chưa có định mức'));
+          row.push('', '');
+        } else {
+          monthKeys.forEach(mk => row.push(Number(r.monthlyDemand[mk].toFixed(2))));
+          row.push(Number(r.totalDemand.toFixed(2)), Number((r.stock - r.totalDemand).toFixed(2)));
+        }
+        excelData.push(row);
+      });
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(excelData);
+      ws['!cols'] = [{ wch: 14 }, { wch: 26 }, { wch: 10 }, { wch: 12 }, ...monthKeys.map(() => ({ wch: 12 })), { wch: 16 }, { wch: 16 }];
+      XLSX.utils.book_append_sheet(wb, ws, 'DuBaoNhuCau');
+      XLSX.writeFile(wb, `dubao_nhucau_${data.fromMonth}${data.fromYear}_${data.toMonth}${data.toYear}.xlsx`);
+      showMessage('forecastResult', '✅ Đã xuất file Excel!', 'success');
+    } catch (e) {
+      showMessage('forecastResult', 'Lỗi xuất Excel: ' + e.message, 'error');
+    }
+  }
+
+  // ================================================================
+  // 20. QUẢN LÝ GIAO DỊCH
+  // ================================================================
+  async function renderAllTransactions() {
+    if (!currentUser || currentUser.role !== 'admin') {
+      showMessage('transactionMessage', 'Không có quyền!', 'error');
+      return;
+    }
+
+    const transactions = await getTransactions();
+    const filterCode = document.getElementById('filterTransactionCode').value.trim().toUpperCase();
+    const filterType = document.getElementById('filterTransactionType').value;
+
+    let filtered = transactions;
+    if (filterCode) {
+      filtered = filtered.filter(t => t.itemCode.toUpperCase().includes(filterCode));
+    }
+    if (filterType !== 'all') {
+      filtered = filtered.filter(t => t.type === filterType);
+    }
+    filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    const tbody = document.getElementById('transactionTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (filtered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7">Không có giao dịch</td></tr>';
+      return;
+    }
+
+    filtered.forEach((t, index) => {
+      const typeLabel = t.type === 'import' ? '📥 Nhập' : '📤 Xuất';
+      const typeColor = t.type === 'import' ? 'color:#27ae60;' : 'color:#e74c3c;';
+      const emp = t.employeeName ? `${t.employeeCode || ''} - ${t.employeeName}` : 'Không xác định';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${index + 1}</td>
+        <td><strong>${t.itemCode}</strong></td>
+        <td style="${typeColor}">${typeLabel}</td>
+        <td>${t.quantity}</td>
+        <td>${t.date}</td>
+        <td>${emp}</td>
+        <td>
+          <button class="btn btn-warning btn-sm edit-trans-btn" data-id="${t.id}">✏️</button>
+          <button class="btn btn-danger btn-sm delete-trans-btn" data-id="${t.id}">🗑️</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    document.querySelectorAll('.edit-trans-btn').forEach(btn => {
+      btn.addEventListener('click', function() { editTransaction(this.dataset.id); });
+    });
+    document.querySelectorAll('.delete-trans-btn').forEach(btn => {
+      btn.addEventListener('click', function() { deleteTransaction(this.dataset.id); });
+    });
+  }
+
+  async function editTransaction(transactionId) {
+    if (!currentUser || currentUser.role !== 'admin') {
+      showMessage('transactionMessage', 'Không có quyền!', 'error');
+      return;
+    }
+    const transactions = await getTransactions();
+    const transaction = transactions.find(t => t.id === transactionId);
+    if (!transaction) {
+      showMessage('transactionMessage', 'Không tìm thấy!', 'error');
+      return;
+    }
+    const newQty = prompt(`Sửa số lượng (hiện: ${transaction.quantity}):`, transaction.quantity);
+    if (newQty === null) return;
+    const newQtyNum = parseInt(newQty);
+    if (isNaN(newQtyNum) || newQtyNum <= 0) {
+      showMessage('transactionMessage', 'Số lượng phải > 0!', 'error');
+      return;
+    }
+    const newDate = prompt(`Sửa ngày (hiện: ${transaction.date}, YYYY-MM-DD):`, transaction.date);
+    if (newDate === null) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+      showMessage('transactionMessage', 'Ngày không đúng định dạng!', 'error');
+      return;
+    }
+    try {
+      await db.collection('transactions').doc(transactionId).update({
+        quantity: newQtyNum,
+        date: newDate
+      });
+      showMessage('transactionMessage', '✅ Đã cập nhật!', 'success');
+      renderAllTransactions();
+      renderStock();
+      renderImportHistory();
+      renderExportHistory();
+      generateAlerts();
+    } catch (e) {
+      showMessage('transactionMessage', 'Lỗi: ' + e.message, 'error');
+    }
+  }
+
+  async function deleteTransaction(transactionId) {
+    if (!currentUser || currentUser.role !== 'admin') {
+      showMessage('transactionMessage', 'Không có quyền!', 'error');
+      return;
+    }
+    if (!confirm('Xóa giao dịch này? KHÔNG thể hoàn tác!')) return;
+    try {
+      await db.collection('transactions').doc(transactionId).delete();
+      showMessage('transactionMessage', '✅ Đã xóa!', 'success');
+      renderAllTransactions();
+      renderStock();
+      renderImportHistory();
+      renderExportHistory();
+      generateAlerts();
+    } catch (e) {
+      showMessage('transactionMessage', 'Lỗi: ' + e.message, 'error');
+    }
+  }
+
+  async function clearAllTransactions() {
+    if (!currentUser || currentUser.role !== 'admin') {
+      showMessage('transactionMessage', 'Không có quyền!', 'error');
+      return;
+    }
+    if (!confirm('🚨 Xóa TẤT CẢ giao dịch? KHÔNG thể hoàn tác!')) return;
+    if (!confirm('⚠️ LẦN CUỐI: Xóa tất cả?')) return;
+    try {
+      const transactions = await getTransactions();
+      const batch = db.batch();
+      transactions.forEach(t => {
+        const ref = db.collection('transactions').doc(t.id);
+        batch.delete(ref);
+      });
+      await batch.commit();
+      showMessage('transactionMessage', '✅ Đã xóa tất cả!', 'success');
+      renderAllTransactions();
+      renderStock();
+      renderImportHistory();
+      renderExportHistory();
+      generateAlerts();
+    } catch (e) {
+      showMessage('transactionMessage', 'Lỗi: ' + e.message, 'error');
+    }
+  }
+
+  // ================================================================
+  // 21. CẢNH BÁO GENERATE
+  // ================================================================
+  // Kích thước mỗi ô tuần co giãn theo số tuần đang chọn, để dù chọn 6/9/12/16
+  // tuần thì dải timeline vẫn nằm gọn trong 1 hàng, không bị wrap xuống dòng 2-3.
+  function getMrpCellSize(weekCount) {
+    if (weekCount <= 6) return 52;
+    if (weekCount <= 9) return 46;
+    if (weekCount <= 12) return 38;
+    return 32; // 16 tuần
+  }
+
+  let _hideOkItems = false; // trạng thái ẩn/hiện mã đã đủ hàng (UI, không lưu server)
+
+  async function generateAlerts() {
+    const items = await getItems();
+    const listEl = document.getElementById('alertsList');
+    if (items.length === 0) {
+      if (listEl) listEl.innerHTML = '<p style="padding:14px;color:#6c757d;">Chưa có hàng hóa để cảnh báo.</p>';
+      return;
+    }
+
+    const planDoc = await db.collection('production_plan').doc('current').get();
+    const planData = planDoc.exists ? planDoc.data() : null;
+    if (!planData || !planData.weeklyProduction) {
+      if (listEl) listEl.innerHTML = '<p style="padding:14px;color:#6c757d;">Chưa có kế hoạch sản xuất theo tuần. Vui lòng nhập kế hoạch.</p>';
+      return;
+    }
+
+    const plansSnapshot = await db.collection('material_plans').get();
+    const planMap = {};
+    plansSnapshot.forEach(doc => { planMap[doc.id] = doc.data(); });
+
+    const purchaseOrders = await getPurchaseOrders();
+    const incomingByWeek = buildIncomingByWeek(purchaseOrders);
+
+    const forecastWeeks = getForecastWeeks();
+    const weekKeys = buildWeekKeys(forecastWeeks);
+    const currentWeekKey = weekKeys[0];
+    const consumedSoFarThisWeek = await getConsumedSoFarThisWeek(currentWeekKey);
+    // Lấy thêm 1 tuần kế tiếp để có nhu cầu tham chiếu, phân loại "sắp thiếu"
+    // ngay cả cho tuần cuối cùng trong cửa sổ dự báo.
+    const nextWeekKey = buildWeekKeys(forecastWeeks + 1)[forecastWeeks];
+
+    updateAlertsTitle(forecastWeeks);
+
+    const sortedItemsBase = sortItemsByCode(items);
+    if (!listEl) return;
+
+    // Tính trước bảng cân đối từng mã, để có thể XẾP ƯU TIÊN: mã có thiếu hụt
+    // từ tuần 4 trở đi (còn kịp đặt hàng nhờ lead time) lên đầu; mã chỉ thiếu
+    // ở tuần 1-3 (đã cận kề) xếp sau; mã đủ hàng xếp cuối/gộp riêng.
+    const itemComputations = sortedItemsBase.map(item => {
+      const plan = planMap[item.code];
+      const consumptionRate = plan?.consumptionRate || 0;
+      const leadTimeDays = typeof item.leadTimeDays === 'number' ? item.leadTimeDays : 0;
+      const rows = computeItemWeeklyBalance(item, consumptionRate, planData.weeklyProduction, incomingByWeek, weekKeys, consumedSoFarThisWeek, currentWeekKey);
+      const reorder = computeReorderDeadline(rows, leadTimeDays);
+
+      // Gắn sẵn trạng thái phân loại (Đủ/Sắp thiếu/Thiếu) cho từng tuần, dùng
+      // chung cho cả dòng tóm tắt (mini-timeline) lẫn bảng chi tiết khi mở ra.
+      rows.forEach((row, idx) => {
+        const nextDemand = idx < rows.length - 1
+          ? rows[idx + 1].demand
+          : (planData.weeklyProduction[nextWeekKey] || 0) * consumptionRate;
+        row.cls = classifyWeekStatus(row.closeStock, nextDemand);
+      });
+
+      // Nếu chưa nhập định mức tiêu hao hoặc lead time, nhu cầu/hạn đặt hàng
+      // tính ra sẽ là 0 -> mã này dễ bị hiểu nhầm là "Đủ hàng" dù thực chất là
+      // CHƯA CÓ dữ liệu để đánh giá. Đánh dấu rõ ràng để không bị nhầm là an toàn.
+      const missingConfig = [];
+      if (!plan || !(plan.consumptionRate > 0)) missingConfig.push('định mức tiêu hao');
+      if (!(leadTimeDays > 0)) missingConfig.push('lead time');
+
+      const hasActionShortage = rows.some(r => r.priorityTier === 'action' && r.closeStock < 0);
+      const hasNearShortage = rows.some(r => r.priorityTier === 'near' && r.closeStock < 0);
+      // priorityRank: 0 = thiếu gấp, 1 = sắp thiếu (còn kịp xử lý), 2 = thiếu
+      // cấu hình (chưa đủ dữ liệu để đánh giá đúng), 3 = thực sự đủ hàng.
+      let priorityRank;
+      if (hasActionShortage) priorityRank = 0;
+      else if (hasNearShortage) priorityRank = 1;
+      else if (missingConfig.length > 0) priorityRank = 2;
+      else priorityRank = 3;
+      const worstCls = rows.some(r => r.cls.cls === 'danger') ? 'danger' : (rows.some(r => r.cls.cls === 'warning') ? 'warning' : 'success');
+      return { item, consumptionRate, rows, reorder, priorityRank, worstCls, missingConfig };
+    });
+    itemComputations.sort((a, b) => a.priorityRank - b.priorityRank || a.item.code.localeCompare(b.item.code));
+
+    const problemItems = itemComputations.filter(c => c.priorityRank === 0 || c.priorityRank === 1);
+    const configItems = itemComputations.filter(c => c.priorityRank === 2);
+    const okItems = itemComputations.filter(c => c.priorityRank === 3);
+    const cellSize = getMrpCellSize(forecastWeeks);
+
+    listEl.innerHTML = '';
+
+    const sectionLabel = document.createElement('div');
+    sectionLabel.className = 'mrp-section-label';
+    sectionLabel.textContent = `⚠️ Cần chú ý (${problemItems.length} mã)`;
+    listEl.appendChild(sectionLabel);
+    problemItems.forEach(c => listEl.appendChild(buildAlertRow(c, cellSize)));
+
+    if (configItems.length > 0) {
+      const configLabel = document.createElement('div');
+      configLabel.className = 'mrp-section-label';
+      configLabel.textContent = `🛠️ Chưa đủ dữ liệu để đánh giá - cần nhập định mức/lead time (${configItems.length} mã)`;
+      listEl.appendChild(configLabel);
+      configItems.forEach(c => listEl.appendChild(buildAlertRow(c, cellSize)));
+    }
+
+    if (!_hideOkItems) {
+      const okLabel = document.createElement('div');
+      okLabel.className = 'mrp-section-label';
+      okLabel.textContent = `✅ Đủ hàng (${okItems.length} mã)`;
+      listEl.appendChild(okLabel);
+      okItems.forEach(c => listEl.appendChild(buildAlertRow(c, cellSize)));
+    }
+  }
+
+  // Xây 1 khối (dòng tóm tắt + mini-timeline + bảng chi tiết ẩn/hiện) cho 1 mã hàng
+  function buildAlertRow({ item, rows, reorder, worstCls, missingConfig }, cellSize) {
+    const wrapper = document.createElement('div');
+
+    // Dùng đơn vị THẬT của mặt hàng (item.unit: kg, m, cuộn...) thay vì hard-code
+    // "pcs" - tránh nhầm lẫn khi nguyên vật liệu không tính theo pcs.
+    const unitLabel = item.unit ? item.unit : 'đơn vị';
+
+    const firstIssueIdx = rows.findIndex(r => r.cls.cls !== 'success');
+    let firstIssueHtml;
+    if (firstIssueIdx === -1) {
+      firstIssueHtml = `<span class="mrp-none">✅ Đủ hàng cả ${rows.length} tuần</span>`;
+    } else {
+      const r = rows[firstIssueIdx];
+      const label = r.cls.cls === 'danger' ? 'Thiếu' : 'Sắp thiếu';
+      const tone = r.cls.cls === 'danger' ? 'mrp-danger' : 'mrp-warn';
+      firstIssueHtml = `<span class="${tone}">${label} từ Tuần ${r.weekNumber} (${r.weekKey})</span>`;
+    }
+
+    let deadlineHtml = '<span class="mrp-none">—</span>';
+    if (reorder) {
+      deadlineHtml = reorder.isOverdue
+        ? `<span class="mrp-overdue">🔴 ĐẶT NGAY (trễ ${Math.abs(reorder.daysUntil)} ngày)</span>`
+        : `<span class="mrp-soon">🟡 Trước ${reorder.latestOrderDate} (còn ${reorder.daysUntil} ngày)</span>`;
+    }
+
+    const barCls = worstCls === 'danger' ? 'mrp-danger-bar' : (worstCls === 'warning' ? 'mrp-warn-bar' : 'mrp-ok-bar');
+
+    const row = document.createElement('div');
+    row.className = `mrp-row ${barCls}`;
+    row.innerHTML = `
+      <div class="mrp-code">${item.code}</div>
+      <div class="mrp-name">${item.name}${missingConfig && missingConfig.length ? `<br><span class="mrp-config-warn" title="Số liệu cảnh báo cho mã này có thể KHÔNG chính xác vì thiếu cấu hình">⚙️ Thiếu: ${missingConfig.join(', ')}</span>` : ''}</div>
+      <div class="mrp-stock">${typeof item.stock === 'number' ? item.stock : 0}</div>
+      <div class="mrp-timeline" style="--mrp-cell:${cellSize}px;">
+        ${rows.map(r => {
+          const wkFont = cellSize <= 34 ? 8.5 : cellSize <= 40 ? 9 : 9.5;
+          const valFont = cellSize <= 34 ? 10 : cellSize <= 40 ? 11 : 12.5;
+          return `
+          <div class="mrp-cell mrp-${r.cls.cls === 'danger' ? 'red' : r.cls.cls === 'warning' ? 'yellow' : 'green'}${r.isCurrentWeek ? ' mrp-current' : ''}" title="Tuần ${r.weekNumber} (${r.weekKey}): tồn cuối ${r.closeStock.toFixed(2)} ${unitLabel}">
+            <span class="mrp-wk" style="font-size:${wkFont}px;">${r.weekKey.split('-W')[1] ? 'W' + r.weekKey.split('-W')[1] : r.weekKey}</span>
+            <span class="mrp-val" style="font-size:${valFont}px;">${r.closeStock > 0 ? '+' : ''}${Math.round(r.closeStock * 100) / 100}</span>
+          </div>
+        `;
+        }).join('')}
+      </div>
+      <div class="mrp-firstissue">${firstIssueHtml}</div>
+      <div class="mrp-deadline">${deadlineHtml}</div>
+      <div class="mrp-chevron">▶</div>
+    `;
+
+    const detail = document.createElement('div');
+    detail.className = 'mrp-detail';
+    detail.innerHTML = `
+      <table>
+        <thead>
+          <tr><th>Tuần</th><th>Tồn đầu (${unitLabel})</th><th>Về trong tuần (${unitLabel})</th><th>Nhu cầu (${unitLabel})</th><th>Tồn cuối (${unitLabel})</th><th>Trạng thái</th></tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => {
+            const rowCls = r.cls.cls === 'danger' ? 'mrp-dred' : r.cls.cls === 'warning' ? 'mrp-dyellow' : 'mrp-dgreen';
+            const demandText = r.isCurrentWeek
+              ? `${r.demand.toFixed(2)} <span style="font-size:11px;color:#6c757d;">(còn lại; KH ${r.plannedDemand.toFixed(2)}, đã xuất ${r.consumedSoFar.toFixed(2)})</span>`
+              : r.demand.toFixed(2);
+            return `
+              <tr class="${rowCls}">
+                <td>Tuần ${r.weekNumber} (${r.weekKey})${r.isCurrentWeek ? ' - đang chạy' : ''}</td>
+                <td>${r.openStock.toFixed(2)}</td>
+                <td>${r.incoming.toFixed(2)}</td>
+                <td>${demandText}</td>
+                <td><strong>${r.closeStock.toFixed(2)}</strong></td>
+                <td>${r.cls.status}${r.cls.shortage > 0 ? ` (${r.cls.shortage.toFixed(2)})` : ''}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+
+    row.addEventListener('click', () => {
+      const isOpen = detail.classList.toggle('mrp-open');
+      row.classList.toggle('mrp-expanded', isOpen);
+    });
+
+    wrapper.appendChild(row);
+    wrapper.appendChild(detail);
+    return wrapper;
+  }
+
+  // ================================================================
+  // 22. CHUYỂN TAB
+  // ================================================================
+  function setupTabs() {
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        const tabId = this.dataset.tab;
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        const target = document.getElementById(tabId);
+        if (target) target.classList.add('active');
+
+        switch (tabId) {
+          case 'tab-items': renderItems(); break;
+          case 'tab-import':
+            populateItemSelects();
+            renderImportHistory();
+            if (document.getElementById('importSourceType').value === 'po') populateImportPoSelect();
+            break;
+          case 'tab-export': populateItemSelects(); renderExportHistory(); break;
+          case 'tab-stock': renderStock(); break;
+          case 'tab-planning':
+            refreshPlanningTab();
+            break;
+          case 'tab-report': populateYearSelect(); renderReport(); break;
+          case 'tab-transactions':
+            if (currentUser && currentUser.role === 'admin') {
+              renderAllTransactions();
+            }
+            break;
+          case 'tab-po':
+            if (currentUser && currentUser.role === 'admin') {
+              populatePoItemSelect();
+              renderPurchaseOrders();
+            }
+            break;
+        }
+      });
+    });
+  }
+
+  // ================================================================
+  // 23. KHỞI TẠO ỨNG DỤNG
+  // ================================================================
+  function startApp() {
+    if (appReady) return;
+    if (!isFirebaseReady()) {
+      console.log('⏳ Waiting for Firebase...');
+      setTimeout(startApp, 500);
+      return;
+    }
+    appReady = true;
+    console.log('🚀 App starting...');
+
+    const today = new Date().toISOString().split('T')[0];
+    const importDate = document.getElementById('importDate');
+    const exportDate = document.getElementById('exportDate');
+    if (importDate) importDate.value = today;
+    if (exportDate) exportDate.value = today;
+  }
+
+  // ================================================================
+  // 24. GÁN SỰ KIỆN
+  // ================================================================
+  function setupEventListeners() {
+    document.getElementById('loginBtn').addEventListener('click', handleLogin);
+    document.getElementById('loginPassword').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') handleLogin();
+    });
+    document.getElementById('loginEmail').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') document.getElementById('loginPassword').focus();
+    });
+
+    document.getElementById('registerBtn').addEventListener('click', handleRegister);
+    document.getElementById('toggleRegisterLink').addEventListener('click', function(e) {
+      e.preventDefault();
+      const form = document.getElementById('registerForm');
+      if (form) form.classList.toggle('hidden');
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+
+    document.getElementById('addItemBtn').addEventListener('click', addItem);
+    document.getElementById('resetItemBtn').addEventListener('click', resetItemForm);
+
+    document.getElementById('cancelEditItemBtn').addEventListener('click', closeEditItemModal);
+    document.getElementById('saveEditItemBtn').addEventListener('click', saveEditItem);
+    // Bấm ra ngoài modal (vùng overlay) cũng đóng modal, giống UX chuẩn
+    document.getElementById('editItemModal').addEventListener('click', function(e) {
+      if (e.target === this) closeEditItemModal();
+    });
+
+    document.getElementById('importExcelBtn').addEventListener('click', importFromExcel);
+    document.getElementById('downloadTemplateBtn').addEventListener('click', downloadTemplate);
+
+    document.getElementById('importBtn').addEventListener('click', importStock);
+    document.getElementById('importSourceType').addEventListener('change', async function() {
+      const isPo = this.value === 'po';
+      document.getElementById('importPoSelectWrap').classList.toggle('hidden', !isPo);
+      document.getElementById('importItemCode').disabled = isPo;
+      if (isPo) {
+        await populateImportPoSelect();
+      } else {
+        document.getElementById('importQty').removeAttribute('max');
+      }
+    });
+    document.getElementById('importPoSelect').addEventListener('change', applySelectedPoToImportForm);
+    document.getElementById('importQty').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') importStock();
+    });
+
+    document.getElementById('exportBtn').addEventListener('click', exportStock);
+    document.getElementById('exportQty').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') exportStock();
+    });
+
+    document.getElementById('refreshStockBtn').addEventListener('click', renderStock);
+
+    document.getElementById('planItemCode')?.addEventListener('change', function() {
+      loadPlanData(this.value);
+    });
+    document.getElementById('savePlanBtn')?.addEventListener('click', saveMaterialPlan);
+    document.getElementById('updateProductionBtn')?.addEventListener('click', updateProductionPlan);
+    document.getElementById('refreshAlertsBtn')?.addEventListener('click', refreshPlanningTab);
+    document.getElementById('expandAllAlertsBtn')?.addEventListener('click', function() {
+      document.querySelectorAll('.mrp-detail').forEach(d => d.classList.add('mrp-open'));
+      document.querySelectorAll('.mrp-row').forEach(r => r.classList.add('mrp-expanded'));
+    });
+    document.getElementById('collapseAllAlertsBtn')?.addEventListener('click', function() {
+      document.querySelectorAll('.mrp-detail').forEach(d => d.classList.remove('mrp-open'));
+      document.querySelectorAll('.mrp-row').forEach(r => r.classList.remove('mrp-expanded'));
+    });
+    document.getElementById('toggleOkItemsBtn')?.addEventListener('click', function() {
+      _hideOkItems = !_hideOkItems;
+      this.textContent = _hideOkItems ? '👁️ Hiện mã đã đủ hàng' : '👁️ Ẩn mã đã đủ hàng';
+      generateAlerts();
+    });
+    document.getElementById('prevWeeksBtn')?.addEventListener('click', function() { shiftWeekWindow(-WEEK_WINDOW_SIZE); });
+    document.getElementById('nextWeeksBtn')?.addEventListener('click', function() { shiftWeekWindow(WEEK_WINDOW_SIZE); });
+    document.getElementById('thisWeekBtn')?.addEventListener('click', resetWeekWindowToToday);
+
+    document.getElementById('applyForecastBtn')?.addEventListener('click', generateAlerts);
+    document.getElementById('forecastWeeks')?.addEventListener('change', generateAlerts);
+    document.getElementById('exportPlanExcelBtn')?.addEventListener('click', exportPlanExcel);
+
+    document.getElementById('poItemCode')?.addEventListener('change', suggestPoExpectedDate);
+    document.getElementById('poOrderDate')?.addEventListener('change', suggestPoExpectedDate);
+    document.getElementById('createPoBtn')?.addEventListener('click', createPurchaseOrder);
+    document.getElementById('refreshPoBtn')?.addEventListener('click', function() {
+      populatePoItemSelect();
+      renderPurchaseOrders();
+    });
+
+    document.getElementById('reportViewBtn').addEventListener('click', renderReport);
+    document.getElementById('reportExportExcelBtn').addEventListener('click', exportReportExcel);
+    document.getElementById('reportExportCSVBtn').addEventListener('click', exportReportCSV);
+    document.getElementById('forecastViewBtn').addEventListener('click', renderForecastReport);
+    document.getElementById('forecastExportExcelBtn').addEventListener('click', exportForecastReportExcel);
+
+    document.getElementById('refreshTransBtn').addEventListener('click', renderAllTransactions);
+    document.getElementById('clearAllTransBtn').addEventListener('click', clearAllTransactions);
+
+    document.getElementById('filterTransactionCode').addEventListener('keyup', function() {
+      if (currentUser && currentUser.role === 'admin') renderAllTransactions();
+    });
+    document.getElementById('filterTransactionType').addEventListener('change', function() {
+      if (currentUser && currentUser.role === 'admin') renderAllTransactions();
+    });
+
+    setupTabs();
+  }
+
+  // ================================================================
+  // 25. KHỞI CHẠY
+  // ================================================================
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('loginSection').style.display = 'block';
+    document.getElementById('appSection').style.display = 'none';
+    setupEventListeners();
+    setTimeout(startApp, 200);
+  });
+
+  console.log('📦 Quản lý kho v9.0 - Tồn kho atomic (transaction), tối ưu truy vấn, dọn dữ liệu khi xóa');
+
+  // Đăng ký service worker để trình duyệt cho phép "Cài đặt" app (PWA).
+  // Chỉ hoạt động khi trang được phục vụ qua http(s) (không chạy khi mở
+  // trực tiếp file HTML bằng file://), và sw.js phải nằm cùng thư mục.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(err => {
+        console.warn('Không đăng ký được service worker (bình thường nếu đang mở file cục bộ):', err);
+      });
+    });
+  }
+</script>
+</body>
+</html>
