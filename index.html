@@ -269,6 +269,97 @@
       margin-top: 8px;
     }
 
+    /* ---- Bộ chọn đơn mua hàng (thay <select> gốc gây rối mắt trên di động) ---- */
+    .po-picker-native-select {
+      /* Vẫn tồn tại trong DOM để giữ nguyên logic .value/.dataset hiện có,
+         nhưng ẩn hẳn khỏi mắt người dùng - giao diện thật là nút + modal bên dưới. */
+      position: absolute;
+      width: 1px; height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .po-picker-trigger {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line);
+      background: var(--surface-alt);
+      color: var(--ink-900);
+      font-size: 14px;
+      font-family: var(--font-body);
+      cursor: pointer;
+      text-align: left;
+    }
+    .po-picker-trigger:hover { border-color: var(--brand-500); }
+    .po-picker-trigger svg { width: 16px; height: 16px; stroke: var(--ink-300); flex-shrink: 0; }
+
+    .po-picker-modal { max-width: 540px; }
+    .po-picker-search {
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line);
+      font-size: 14px;
+      background: var(--surface-alt);
+      margin-bottom: 10px;
+    }
+    .po-picker-search:focus {
+      border-color: var(--brand-500);
+      outline: none;
+      background: #fff;
+      box-shadow: 0 0 0 3px var(--brand-100);
+    }
+    .po-picker-list {
+      max-height: 50vh;
+      overflow-y: auto;
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius-md);
+    }
+    .po-picker-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 11px 13px;
+      border-bottom: 1px solid var(--line-soft);
+      cursor: pointer;
+    }
+    .po-picker-row:last-child { border-bottom: none; }
+    .po-picker-row:hover { background: var(--brand-100); }
+    .po-picker-row.po-picker-selected { background: var(--brand-100); box-shadow: inset 3px 0 0 var(--brand-600); }
+    .po-picker-row-main { min-width: 0; }
+    .po-picker-row-code { font-family: var(--font-mono); font-weight: 700; color: var(--ink-900); font-size: 13.5px; }
+    .po-picker-row-name {
+      font-size: 12.5px;
+      color: var(--ink-500);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 62vw;
+    }
+    .po-picker-row-meta {
+      flex-shrink: 0;
+      text-align: right;
+      font-size: 11.5px;
+      color: var(--ink-500);
+      line-height: 1.5;
+    }
+    .po-picker-row-qty {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      color: var(--brand-700);
+      background: var(--brand-100);
+      border-radius: 999px;
+      padding: 1px 9px;
+      font-size: 12px;
+    }
+    .po-picker-empty { padding: 20px 14px; text-align: center; color: var(--ink-300); font-size: 13px; }
+
     #appSection {
       display: none;
     }
@@ -938,6 +1029,18 @@
     </div>
   </div>
 
+  <!-- ===== MODAL: CHỌN ĐƠN MUA HÀNG (thay cho <select> gốc dễ rối mắt trên di động) ===== -->
+  <div id="poPickerModal" class="modal-overlay hidden">
+    <div class="modal-box po-picker-modal">
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="12" height="9"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="6.5" cy="18" r="1.7"/><circle cx="17" cy="18" r="1.7"/></svg> Chọn đơn đang chờ về</h3>
+      <input type="text" id="poPickerSearch" placeholder="Tìm theo mã hoặc tên hàng..." class="po-picker-search" />
+      <div id="poPickerList" class="po-picker-list"></div>
+      <div class="modal-actions">
+        <button class="btn btn-warning" id="poPickerCancelBtn">Đóng</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== TAB: NHẬP KHO ===== -->
   <div id="tab-import" class="tab-content">
     <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v6a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-6"/><path d="M4 12h4l1.5 2.5h5L16 12h4"/><path d="M12 3v8"/><path d="M9 8l3 3 3-3"/></svg> Nhập kho</h3>
@@ -951,7 +1054,14 @@
       </div>
       <div id="importPoSelectWrap" class="hidden">
         <label>Chọn đơn đang chờ về:</label>
-        <select id="importPoSelect"></select>
+        <button type="button" class="po-picker-trigger" id="importPoTrigger">
+          <span id="importPoTriggerText">-- Chọn đơn đang chờ về --</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <!-- select thật vẫn giữ lại (ẩn khỏi mắt) để không phải viết lại toàn
+             bộ logic importStock()/applySelectedPoToImportForm() vốn đọc value
+             + dataset từ đây; nút + modal bên trên chỉ là lớp giao diện phủ lên. -->
+        <select id="importPoSelect" class="po-picker-native-select"></select>
       </div>
     </div>
     <p style="font-size:12px;color:var(--ink-500);margin:-4px 0 12px;">
@@ -2159,30 +2269,108 @@
   // Đổ danh sách các đơn mua hàng đang "chờ về" (status='ordered') vào dropdown
   // ở tab Nhập kho, để công nhân/quản lý chọn đúng đơn khi hàng thực về kho -
   // đây là NƠI DUY NHẤT tạo giao dịch nhập kho gắn với 1 PO (xem importStock()).
+  // Dữ liệu PO+tên hàng đang mở, lưu lại để vẽ modal chọn (po-picker) và lọc
+  // theo ô tìm kiếm mà không phải gọi lại Firestore mỗi lần gõ phím.
+  let _importPoOptions = [];
+
   async function populateImportPoSelect() {
     const sel = document.getElementById('importPoSelect');
     if (!sel) return;
     const [pos, items] = await Promise.all([getPurchaseOrders(), getItems()]);
     const openPos = pos.filter(p => p.status === 'ordered');
-    sel.innerHTML = '';
-    if (openPos.length === 0) {
-      sel.innerHTML = '<option value="">-- Không có đơn nào đang chờ về --</option>';
-      return;
-    }
-    // Tra tên hàng theo mã để hiển thị kèm trong dropdown, tránh phải nhớ mã số.
+
+    // Tra tên hàng theo mã để hiển thị kèm, tránh phải nhớ mã số.
     const nameByCode = {};
     items.forEach(it => { nameByCode[it.code] = it.name; });
 
-    openPos.forEach(po => {
-      const opt = document.createElement('option');
-      opt.value = po.id;
-      opt.dataset.itemCode = po.itemCode;
-      opt.dataset.quantity = po.quantity;
-      const itemName = nameByCode[po.itemCode] || '';
-      opt.textContent = `${po.itemCode}${itemName ? ' - ' + itemName : ''} — còn ${po.quantity} — dự kiến ${po.expectedArrivalDate}`;
-      sel.appendChild(opt);
-    });
+    _importPoOptions = openPos.map(po => ({
+      id: po.id,
+      itemCode: po.itemCode,
+      itemName: nameByCode[po.itemCode] || '',
+      quantity: po.quantity,
+      expectedArrivalDate: po.expectedArrivalDate
+    }));
+
+    // Vẫn đổ dữ liệu vào <select> ẩn để giữ nguyên cách importStock() đọc
+    // value/dataset - modal chọn bên dưới chỉ là lớp giao diện phủ lên trên.
+    sel.innerHTML = '';
+    if (_importPoOptions.length === 0) {
+      sel.innerHTML = '<option value="">-- Không có đơn nào đang chờ về --</option>';
+    } else {
+      _importPoOptions.forEach(po => {
+        const opt = document.createElement('option');
+        opt.value = po.id;
+        opt.dataset.itemCode = po.itemCode;
+        opt.dataset.quantity = po.quantity;
+        sel.appendChild(opt);
+      });
+    }
     applySelectedPoToImportForm();
+    updateImportPoTriggerText();
+  }
+
+  // Cập nhật dòng chữ hiển thị trên nút bấm (thay cho <select> gốc)
+  function updateImportPoTriggerText() {
+    const triggerText = document.getElementById('importPoTriggerText');
+    if (!triggerText) return;
+    const current = _importPoOptions.find(po => po.id === document.getElementById('importPoSelect').value);
+    if (!current) {
+      triggerText.textContent = _importPoOptions.length === 0 ? 'Không có đơn nào đang chờ về' : '-- Chọn đơn đang chờ về --';
+      return;
+    }
+    triggerText.textContent = `${current.itemCode}${current.itemName ? ' - ' + current.itemName : ''} · còn ${current.quantity}`;
+  }
+
+  // Vẽ danh sách card trong modal po-picker, có thể lọc theo từ khóa tìm kiếm.
+  function renderPoPickerList(filterText = '') {
+    const listEl = document.getElementById('poPickerList');
+    if (!listEl) return;
+    const kw = filterText.trim().toLowerCase();
+    const currentId = document.getElementById('importPoSelect').value;
+
+    const filtered = !kw ? _importPoOptions : _importPoOptions.filter(po =>
+      po.itemCode.toLowerCase().includes(kw) || po.itemName.toLowerCase().includes(kw)
+    );
+
+    if (filtered.length === 0) {
+      listEl.innerHTML = `<div class="po-picker-empty">${_importPoOptions.length === 0 ? 'Không có đơn nào đang chờ về' : 'Không tìm thấy đơn phù hợp'}</div>`;
+      return;
+    }
+
+    listEl.innerHTML = filtered.map(po => `
+      <div class="po-picker-row${po.id === currentId ? ' po-picker-selected' : ''}" data-po-id="${po.id}">
+        <div class="po-picker-row-main">
+          <div class="po-picker-row-code">${po.itemCode}</div>
+          ${po.itemName ? `<div class="po-picker-row-name">${po.itemName}</div>` : ''}
+        </div>
+        <div class="po-picker-row-meta">
+          <div class="po-picker-row-qty">còn ${po.quantity}</div>
+          <div>dự kiến ${po.expectedArrivalDate}</div>
+        </div>
+      </div>
+    `).join('');
+
+    listEl.querySelectorAll('.po-picker-row').forEach(row => {
+      row.addEventListener('click', () => selectPoOption(row.dataset.poId));
+    });
+  }
+
+  function openPoPickerModal() {
+    document.getElementById('poPickerSearch').value = '';
+    renderPoPickerList('');
+    document.getElementById('poPickerModal').classList.remove('hidden');
+  }
+
+  function closePoPickerModal() {
+    document.getElementById('poPickerModal').classList.add('hidden');
+  }
+
+  function selectPoOption(poId) {
+    const sel = document.getElementById('importPoSelect');
+    sel.value = poId;
+    applySelectedPoToImportForm();
+    updateImportPoTriggerText();
+    closePoPickerModal();
   }
 
   // Khi chọn 1 đơn PO cụ thể, tự điền sẵn mã hàng + số lượng còn lại của đơn
@@ -2206,10 +2394,14 @@
     const poWrap = document.getElementById('importPoSelectWrap');
     const itemSel = document.getElementById('importItemCode');
     const qtyInput = document.getElementById('importQty');
+    const poSel = document.getElementById('importPoSelect');
+    const triggerText = document.getElementById('importPoTriggerText');
     if (sourceSel) sourceSel.value = 'normal';
     if (poWrap) poWrap.classList.add('hidden');
     if (itemSel) itemSel.disabled = false;
     if (qtyInput) qtyInput.removeAttribute('max');
+    if (poSel) poSel.value = '';
+    if (triggerText) triggerText.textContent = '-- Chọn đơn đang chờ về --';
   }
 
   async function importStock() {
@@ -4055,6 +4247,14 @@
       }
     });
     document.getElementById('importPoSelect').addEventListener('change', applySelectedPoToImportForm);
+    document.getElementById('importPoTrigger').addEventListener('click', openPoPickerModal);
+    document.getElementById('poPickerCancelBtn').addEventListener('click', closePoPickerModal);
+    document.getElementById('poPickerModal').addEventListener('click', function(e) {
+      if (e.target === this) closePoPickerModal();
+    });
+    document.getElementById('poPickerSearch').addEventListener('input', function() {
+      renderPoPickerList(this.value);
+    });
     document.getElementById('importQty').addEventListener('keypress', function(e) {
       if (e.key === 'Enter') importStock();
     });
