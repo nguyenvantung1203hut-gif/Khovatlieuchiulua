@@ -1101,6 +1101,28 @@
     </div>
   </div>
 
+  <!-- ===== MODAL: SỬA THÔNG TIN NHÂN VIÊN (Mã NV / Họ tên) ===== -->
+  <div id="editAccountModal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> Sửa thông tin nhân viên</h3>
+      <div class="form-group">
+        <div><label>Email (không đổi được):</label><input type="text" id="editAccountEmail" disabled /></div>
+      </div>
+      <div class="form-group">
+        <div><label>Mã nhân viên:</label><input type="text" id="editAccountCode" placeholder="VD: MV080" /></div>
+      </div>
+      <div class="form-group">
+        <div><label>Họ và tên:</label><input type="text" id="editAccountName" placeholder="VD: Nguyễn Văn Tùng" /></div>
+      </div>
+      <p style="font-size:12px;color:var(--ink-500);margin:-6px 0 10px;">Lưu ý: các giao dịch nhập/xuất kho ĐÃ ghi trước đó sẽ KHÔNG tự đổi tên theo (vì hệ thống lưu tên tại thời điểm thao tác). Chỉ các giao dịch MỚI sau khi sửa mới hiện đúng tên này.</p>
+      <div id="editAccountMessage"></div>
+      <div class="modal-actions">
+        <button class="btn btn-warning" id="cancelEditAccountBtn">Hủy</button>
+        <button class="btn btn-success" id="saveEditAccountBtn">💾 Lưu thay đổi</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== MODAL: CHỌN ĐƠN MUA HÀNG (thay cho <select> gốc dễ rối mắt trên di động) ===== -->
   <div id="poPickerModal" class="modal-overlay hidden">
     <div class="modal-box po-picker-modal">
@@ -1420,7 +1442,8 @@
             <th>Họ tên</th>
             <th>Email</th>
             <th>Quyền</th>
-            <th>Hành động</th>
+            <th>Sửa tên</th>
+            <th>Đổi quyền</th>
           </tr>
         </thead>
         <tbody id="approvedAccountsBody"></tbody>
@@ -3945,11 +3968,12 @@
         html += `
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:8px;background:var(--surface);">
           <div><strong>${u.employeeCode || '—'} - ${u.employeeName || '—'}</strong><div style="font-size:12px;color:var(--ink-500);">${u.email || ''}</div></div>
-          <div style="display:flex;gap:8px;align-items:center;">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <select id="role-select-${u.id}" ${isHardAdmin ? 'disabled' : ''}>
               <option value="worker" ${u.role !== 'admin' ? 'selected' : ''}>Công nhân</option>
               <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
             </select>
+            <button class="btn btn-info btn-sm edit-account-btn" data-id="${u.id}">✏️ Sửa tên</button>
             <button class="btn btn-success btn-sm approve-account-btn" data-id="${u.id}">✅ Duyệt</button>
             <button class="btn btn-danger btn-sm reject-account-btn" data-id="${u.id}">❌ Từ chối</button>
           </div>
@@ -3962,20 +3986,23 @@
       document.querySelectorAll('.reject-account-btn').forEach(btn => {
         btn.addEventListener('click', function() { rejectAccount(this.dataset.id); });
       });
+      document.querySelectorAll('#pendingAccountsList .edit-account-btn').forEach(btn => {
+        btn.addEventListener('click', function() { openEditAccountModal(this.dataset.id, accounts); });
+      });
     }
 
     approvedBody.innerHTML = '';
     if (approved.length === 0) {
-      approvedBody.innerHTML = '<tr><td colspan="5">Chưa có tài khoản nào.</td></tr>';
+      approvedBody.innerHTML = '<tr><td colspan="6">Chưa có tài khoản nào.</td></tr>';
     } else {
       approved.forEach(u => {
         const isHardAdmin = ADMIN_EMAILS.includes(u.email);
         const role = isHardAdmin ? 'admin' : (u.role || 'worker');
         const isSelf = currentUser && currentUser.uid === u.id;
         const tr = document.createElement('tr');
-        let actionHtml = '<span style="color:var(--ink-500);">Bạn</span>';
+        let roleActionHtml = '<span style="color:var(--ink-500);">Bạn</span>';
         if (!isSelf) {
-          actionHtml = isHardAdmin
+          roleActionHtml = isHardAdmin
             ? '<span style="color:var(--ink-500);" title="Quyền admin được cấu hình cứng trong hệ thống, không đổi được ở đây">Cố định (cấu hình)</span>'
             : `<button class="btn btn-warning btn-sm toggle-role-btn" data-id="${u.id}" data-role="${role}">🔁 Đổi thành ${role === 'admin' ? 'Công nhân' : 'Admin'}</button>`;
         }
@@ -3984,13 +4011,58 @@
           <td>${u.employeeName || '—'}</td>
           <td>${u.email || ''}</td>
           <td><span class="badge ${role === 'admin' ? 'badge-admin' : 'badge-worker'}">${role === 'admin' ? 'Admin' : 'Công nhân'}</span></td>
-          <td>${actionHtml}</td>
+          <td><button class="btn btn-info btn-sm edit-account-btn" data-id="${u.id}">✏️ Sửa tên</button></td>
+          <td>${roleActionHtml}</td>
         `;
         approvedBody.appendChild(tr);
       });
       document.querySelectorAll('.toggle-role-btn').forEach(btn => {
         btn.addEventListener('click', function() { toggleAccountRole(this.dataset.id, this.dataset.role); });
       });
+      document.querySelectorAll('#approvedAccountsBody .edit-account-btn').forEach(btn => {
+        btn.addEventListener('click', function() { openEditAccountModal(this.dataset.id, accounts); });
+      });
+    }
+  }
+
+  function openEditAccountModal(uid, accounts) {
+    const u = accounts.find(a => a.id === uid);
+    if (!u) return;
+    document.getElementById('editAccountEmail').value = u.email || '';
+    document.getElementById('editAccountCode').value = u.employeeCode || '';
+    document.getElementById('editAccountName').value = u.employeeName || '';
+    document.getElementById('editAccountMessage').innerHTML = '';
+    document.getElementById('editAccountModal').dataset.uid = uid;
+    document.getElementById('editAccountModal').classList.remove('hidden');
+  }
+
+  function closeEditAccountModal() {
+    document.getElementById('editAccountModal').classList.add('hidden');
+  }
+
+  async function saveEditAccount() {
+    const uid = document.getElementById('editAccountModal').dataset.uid;
+    if (!uid || !currentUser || currentUser.role !== 'admin') return;
+    const employeeCode = document.getElementById('editAccountCode').value.trim();
+    const employeeName = document.getElementById('editAccountName').value.trim();
+    if (!employeeName) {
+      showMessage('editAccountMessage', 'Họ và tên không được để trống!', 'error');
+      return;
+    }
+    try {
+      await db.collection('users').doc(uid).update({ employeeCode, employeeName });
+      // Nếu admin vừa sửa đúng hồ sơ của chính mình đang đăng nhập, cập nhật
+      // luôn currentUser + phần hiển thị trên header để không cần tải lại trang.
+      if (currentUser.uid === uid) {
+        currentUser.employeeCode = employeeCode;
+        currentUser.employeeName = employeeName;
+        const empInfo = document.getElementById('employeeInfoDisplay');
+        if (empInfo) empInfo.textContent = employeeCode && employeeName ? `| ${employeeCode} - ${employeeName}` : '| (Chưa cập nhật hồ sơ)';
+      }
+      closeEditAccountModal();
+      renderAccounts();
+    } catch (e) {
+      showMessage('editAccountMessage', 'Lỗi: ' + e.message, 'error');
     }
   }
 
@@ -4687,6 +4759,12 @@
     // Bấm ra ngoài modal (vùng overlay) cũng đóng modal, giống UX chuẩn
     document.getElementById('editItemModal').addEventListener('click', function(e) {
       if (e.target === this) closeEditItemModal();
+    });
+
+    document.getElementById('cancelEditAccountBtn')?.addEventListener('click', closeEditAccountModal);
+    document.getElementById('saveEditAccountBtn')?.addEventListener('click', saveEditAccount);
+    document.getElementById('editAccountModal')?.addEventListener('click', function(e) {
+      if (e.target === this) closeEditAccountModal();
     });
 
     document.getElementById('importExcelBtn').addEventListener('click', importFromExcel);
