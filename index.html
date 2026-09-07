@@ -1337,8 +1337,8 @@
 
   <!-- ===== TAB: BÁO CÁO ===== -->
   <div id="tab-report" class="tab-content">
-    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 7-8"/><path d="M15 6h5v5"/></svg> Báo cáo nhập – xuất – tồn theo tháng <span id="reportAdminOnly" class="hidden">(Chỉ Admin)</span></h3>
-    <div id="reportAdminControls" class="hidden">
+    <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 7-8"/><path d="M15 6h5v5"/></svg> Báo cáo nhập – xuất – tồn theo tháng</h3>
+    <div id="reportAdminControls">
       <div class="form-group">
         <div><label>Từ ngày:</label><input type="date" id="reportFromDate" /></div>
         <div><label>Đến ngày:</label><input type="date" id="reportToDate" /></div>
@@ -1789,7 +1789,7 @@
         }
 
         const isAdmin = currentUser.role === 'admin';
-        const adminElements = ['itemAdminOnly', 'itemAdminControls', 'reportAdminOnly', 'reportAdminControls', 'transAdminOnly', 'transAdminControls', 'planAdminOnly', 'planAdminControls', 'forecastAdminOnly', 'forecastAdminControls'];
+        const adminElements = ['itemAdminOnly', 'itemAdminControls', 'transAdminOnly', 'transAdminControls', 'planAdminOnly', 'planAdminControls', 'forecastAdminOnly', 'forecastAdminControls'];
         adminElements.forEach(id => {
           const el = document.getElementById(id);
           if (el) {
